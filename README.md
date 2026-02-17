@@ -38,223 +38,141 @@ To ensure you are using a clean, safe, and unmodified version of TeamTalk Plus, 
 This application is designed to be usable with Android's accessibility services (TalkBack). Here is a specific guide for visually impaired users.
 
 ### 1. Navigation Concepts
-*   **Horizontal Tabs, Vertical Lists:** The main interface uses a "Page" system. To switch between views (Files, Channels, Chat, etc.), perform a **two-finger swipe left or right**.
-*   **Inside a Tab:** Once you are on a page (e.g., "Channels"), the content is a standard **vertical list**. Swipe up/down with two fingers to scroll.
-*   **Focus Assistant:** The app includes a special features that prevents the screen from refreshing too aggressively when you are reading logs. If TalkBack suddenly stops reading, touch the screen again to regain focus.
+*   **Horizontal Tabs (Pages):** The main interface is divided into pages (Files, Channels, Chat, etc.). To switch tabs, perform a **two-finger swipe left or right**. You can also explore by touch near the top to find the tab headers.
+*   **Vertical Lists:** Inside a tab, the content (like the channel tree) is a standard list. Scroll up/down using **two fingers**.
 
-### 2. Button Locations
-*   **Transmit (PTT):** The large button at the **bottom-right** of the screen is the "Transmit" button. Double-tap and hold to talk.
-*   **Voice Activation:** The button above the Transmit button toggles Voice Activation (Hands-free) on/off.
-*   **Microphone Gain:** The slider in the middle controls your microphone volume. Use volume keys to adjust when focused.
+### 2. How to Join a Channel
+There are two ways to enter a channel:
+1.  **Swipe Navigation:** Swipe right until you hear the Channel Name. Swipe right *again* to find the **"Join"** button located next to it. Double-tap to join.
+    *   *Note:* If you swipe Left-to-Right, you hear **Name -> Join Button**.
+    *   *Note:* If you swipe Right-to-Left, you hear **Join Button -> Name**.
+2.  **Long Press Shortcut:** Locate the Channel Name -> **Double-tap and hold the second tap** -> Select **"Join"** from the menu.
 
-### 3. "Long Press" (Context Menu)
-Many features are hidden behind a **Long Press**. In TalkBack, this gesture is performed as:
+### 3. "Long Press" Gesture
+Many features are hidden behind a context menu. In TalkBack, the "Long Press" gesture is:
 👉 **Double-tap and hold the second tap.**
 
-*   **To Join a Channel:** Find the channel name -> Double-tap and hold the second tap -> Select **"Join"**.
-*   **To Ban a User:** Find the user name -> Double-tap and hold the second tap -> Select **"Ban from server"** (Admin only).
+### 4. Important Buttons
+*   **Transmit (PTT):** Bottom-right corner. **Double-tap and hold** to talk.
+*   **Voice Activation:** Above the PTT button. Toggles hands-free mode.
+*   **Microphone Gain:** Slider in the middle. When focused, use **Volume Up/Down keys** on your phone to adjust the slider precisely.
 
 ---
 
 ## 📚 THE 12 TABS OF TEAMTALK PLUS
 
-After connecting to a server, the interface is divided into **12 tabs**. You can swipe left/right to navigate them.
+After connecting, swipe left/right to navigate these 12 tabs:
 
 #### 1. FILES
-*   **Function:** Shows files uploaded to the current channel.
-*   **Actions:**
-    *   Tap a file to **Download**.
-    *   Tap Menu -> **Upload File** to share a file.
+*   **Function:** Shows files in the current channel.
+*   **Actions:** Tap to download. Long Press (Double-tap hold) to Delete (requires `USERRIGHT_DELETE_FILE` or Admin).
 
 #### 2. CHANNELS
-*   **Function:** The main view showing the server channel tree and users.
-*   **Actions:** This is where you spend most of your time. See "Context Menu Reference" below for more.
+*   **Function:** The main server tree.
+*   **Actions:** See "Context Menu Reference" below.
 
 #### 3. MEDIA STREAMS
-*   **Function:** Control center for streaming media files (Music/Video) to the channel.
-*   **Actions:** Tap **"Stream Media File"** to broadcast music to everyone in the channel. Note: Requires admin rights on some servers.
+*   **Function:** Broadcast music/video to the channel.
+*   **Requirements:** Requires `USERRIGHT_UPLOAD_FILE` usually.
 
-#### 4. SERVER MANAGEMENT (Admin Only)
-*   **Function:** Administrative tools. Visible only if you have admin rights.
-*   **Buttons:**
-    *   **Server Information:** View/Edit server name and MOTD.
-    *   **User Accounts:** Create/Edit/Delete users.
-    *   **Server Banned Users:** Manage server-wide bans.
-    *   **Server Statistics:** View uptime and traffic data.
+#### 4. SERVER MANAGEMENT
+*   **Visibility:** Buttons appear based on your specific rights.
+*   **Server Properties:** Visible if you have `USERRIGHT_UPDATE_SERVERPROPERTIES`.
+*   **User Accounts:** Visible **ONLY** if you are a `USERTYPE_ADMIN`.
+*   **Server Banned Users:** Visible if you have `USERRIGHT_BAN_USERS`.
+*   **Server Statistics:** Visible to everyone, but the server may refuse to send data if you are not an Admin.
 
 #### 5. GLOBAL
-*   **Function:** Global chat (Broadcast messages).
-*   **Interface:**
-    *   **List:** Shows messages sent to "Everyone".
-    *   **Input Box:** Type message here.
-    *   **Send:** Broadcasts your message to the entire server.
+*   **Function:** Send text messages to "Everyone" on the server.
 
 #### 6. EVENT HISTORY
-*   **Function:** A log of server events.
-*   **Content:** Shows "User logged in", "User joined channel", "Use left channel" events. Useful for admins to track activity.
+*   **Function:** Logs logins, logouts, and channel joins.
 
 #### 7. CHANNEL MESSAGES
-*   **Function:** Chat specific to your current channel.
-*   **Interface:** Standard chat interface. Only people in your room see these messages.
+*   **Function:** Text chat for your current channel only.
 
 #### 8. SETTINGS
-*   **Function:** Quick access to App Preferences. (See "Ultimate Settings Guide" below).
+*   **Function:** Opens the Preferences menu.
 
 #### 9. PRIVATE
-*   **Function:** Manages private conversations (PMs).
-*   **Interface:** Lists users you are currently chatting with privately. Tap a user to open the chat window.
+*   **Function:** List of active private conversations.
 
 #### 10. CONNECTION STATUS
-*   **Function:** Technical connection details.
-*   **Data:**
-    *   **Connection:** Online/Offline status.
-    *   **Ping:** Your latency in milliseconds (ms).
-    *   **RX/TX:** Total data received and transmitted.
+*   **Function:** Shows Ping, Packet Loss, and UDP connection state.
 
 #### 11. ONLINE USERS
-*   **Function:** A simple list of everyone currently on the server, sorted alphabetically.
-*   **Actions:** Easier to browse than the tree view if the server is huge.
+*   **Function:** A flat list of all users. Useful for finding someone quickly without expanding channel trees.
 
 #### 12. MANAGE STATUS
-*   **Function:** Quickly update your user status.
-*   **Interface:**
-    *   **Status Mode:** Dropdown to select **Online**, **Away**, or **Question**.
-    *   **Status Message:** Text box to type a custom note (e.g., "Eating lunch").
-    *   **Save:** Updates your status immediately for all users to see.
+*   **Function:** Set "Away", "Question", or "Online" status and custom status messages.
 
 ---
 
 ## 👆 CONTEXT MENU REFERENCE (Double-tap and hold)
 
-Detailed guide on what happens when you perform the **TalkBack Long Press** (Double-tap and hold the second tap).
+### On a CHANNEL
+*   **Join:** Enter the channel.
+*   **New Channel:** Create a sub-channel. *Requires `USERRIGHT_CREATE_TEMPORARY_CHANNEL` or `USERRIGHT_MODIFY_CHANNELS`.*
+*   **Channel Properties:** Edit Name, Topic, Password. *Requires `USERRIGHT_MODIFY_CHANNELS` or Channel Operator status.*
+*   **Move Users:** Drag users here. *Requires `USERRIGHT_MOVE_USERS`.*
 
 ### On a USER
-*   **Copy Name/ID/IP:** Copies information to your clipboard.
-*   **User Properties:** (Admin) Edit the user's account name, password, or rights.
-*   **Message:** Opens a private chat with this user.
-*   **Make/Revoke Operator:** Gives or removes Channel Operator status (if you have permission).
-*   **Kick from Channel/Server:** Forces the user to leave.
-*   **Ban from Channel/Server:** Bans the user permanently (or until unbanned).
-
-### On a CHANNEL
-*   **Join:** Enters the channel.
-*   **Channel Properties:** (Admin) Edit Name, Password, Topic, Audio Codec.
-*   **New Channel:** (Admin) Create a sub-channel under this one.
-*   **Move Users:** (Admin) Move selected users into this channel.
-*   **Channel Banned Users:** View list of people banned specifically from this channel.
-
-### On a FILE
-*   **Download:** Saves file to your device.
-*   **Delete:** (Admin/Op) Removes the file from the server.
+*   **Message:** Private Chat.
+*   **Make/Revoke Operator:** Grants Channel Operator.
+    *   *If you are Admin or have `USERRIGHT_OPERATOR_ENABLE`:* Toggles immediately.
+    *   *If not:* Prompts for the **Channel Operator Password**.
+*   **Kick:** Kick from Channel/Server. *Requires `USERRIGHT_KICK_USERS`.*
+*   **Ban:** Ban from Channel/Server. *Requires `USERRIGHT_BAN_USERS`.*
 
 ---
 
 ## ⚙️ ULTIMATE SETTINGS GUIDE
 
-Detailed explanation of every setting in the app.
+A complete breakdown of every option in the app.
 
-### General
-*   **Nickname:** Change your display name.
-*   **Gender:** Set icon (Man/Woman/Neutral).
-*   **BearWare Logins:** Link your BearWare account (optional).
-*   **Move Talking Users:** If checked, people who are talking jump to the top of the list (Useful for large channels).
-*   **Show Usernames:** Displays login names (e.g., "john_doe") instead of nicknames (e.g., "John D").
-*   **Vibrate:** Vibrate phone when you press the PTT button.
-*   **Proximity Sensor:** Turns screen off when you hold phone to ear (saves battery).
+### 1. General (`pref_general`)
+*   **Nickname:** Name shown to others.
+*   **Language:** Force app language (e.g., Portuguese, English).
+*   **Gender:** Icon displayed (Male/Female).
+*   **BearWare Logins:** Use a stored BearWare account.
+*   **Move Talking Users:** *Accessibility Tip:* Moves whoever is speaking to the top of the list so you can find them easily.
+*   **Show Usernames:** Show login username instead of nickname.
+*   **Vibrate:** Tactile feedback when pressing PTT.
+*   **Proximity Sensor:** Screens off when holding phone to ear.
+*   **Keep Screen On:** Prevents phone from locking while connected.
+*   **Show Log Messages:** Display server events (joins/leaves) in the chat view.
 
-### Connection
-*   **Auto Join Root:** Automatically enter the main channel upon connection.
-*   **Subscriptions:** Choose what data you receive (Text, Voice, Video, Desktop). Unchecking these can save data usage.
+### 2. Connection (`pref_connection`)
+*   **Auto Join Root:** Automatically enter the default channel on login.
+*   **Subscriptions:** Checkboxes to subscribe/unsubscribe from data types (Text, Voice, Video, Desktop, Media Files). Turning these off saves bandwidth.
 
-### Sound System
-*   **Master Volume:** Overall app volume.
-*   **Microphone Gain:** Input sensitivity.
-*   **Voice Processing:** Enable Echo Cancellation (Recommended).
-*   **Speakerphone:** Force sound to main speaker instead of earpiece.
+### 3. Sound System (`pref_soundsystem`)
+*   **Mute Speakers on TX:** Mutes incoming audio while you are browsing (avoids feedback loops).
+*   **Speakerphone:** Forces audio to the loud speaker instead of the earpiece.
+*   **Voice Processing:** Enables Echo Cancellation and Noise Suppression. **Highly Recommended**.
+*   **Bluetooth Headset:** Experimental support for turning on Bluetooth SCO.
+*   **Media Volume:** Set the default volume for music files.
 
-### Text-to-Speech (TTS)
-*   **Events:** Configure what the app reads aloud:
-    *   User Login/Logout
+### 4. Text-to-Speech (`pref_tts`)
+*   **Speech Engine:** Pick your favorite synthetic voice.
+*   **Accessibility Volume:** Lowers other audio when TTS is speaking.
+*   **Use Announcements:** Master switch for app announcements.
+*   **Events to Announce:**
+    *   Server Login/Logout
     *   Channel Join/Leave
-    *   Private/Channel Messages
-    *   Mistakes/Errors
-*   **Voice Engine:** Select which Android TTS engine to use (activity dependent).
+    *   User Channel Movement (Tip: Turn off on large servers to avoid noise)
+    *   Private/Channel/Broadcast Messages
+*   **Transmission Announcements:** Announces when you start/stop transmitting Voice, Video, or Desktop.
+*   **Subscription Announcements:** Announces when you subscribe to a stream.
 
 ---
 
-## 🐧 PREPARATION (Linux)
+## 📥 INSTALLATION
 
-To compile this project yourself, you need a Linux machine (Ubuntu, Debian, or similar). We verify our builds on Ubuntu 22.04 LTS.
-
-**1. Install Essential Tools:**
-Open your terminal and run the following command to install Java, Git, and other necessary utilities:
-
-```bash
-sudo apt update
-sudo apt install openjdk-17-jdk git git-lfs unzip zip curl
-```
-
-**2. Verify Installations:**
-*   `java -version` should show OpenJDK 17.
-*   `git --version` should show Git installed.
-*   `git lfs --version` should confirm Large File Storage is ready.
-
----
-
-## 🛠️ COMPILATION (Step-by-Step)
-
-**⚠️ CRITICAL WARNING:** Do NOT use Android Studio unless you are an expert. Use the command line as shown below to avoid headaches!
-
-**1. Clone the Repository:**
-```bash
-git clone https://github.com/YourUsername/TeamTalkPlus.git
-cd TeamTalkPlus
-```
-
-**2. Extract Native Libraries (Crucial Step):**
-The app will CRASH if you skip this. The native audio/video libraries are zipped to save space.
-```bash
-cd app/src/main
-unzip jniLibs.zip -d . 
-# You should now see a 'jniLibs' folder here.
-cd ../../..
-```
-
-**3. Set SDK Location:**
-Tell the build system where your Android SDK is.
-*   If you successfully installed the SDK to `~/Android/Sdk`, run:
-    ```bash
-    echo "sdk.dir=$HOME/Android/Sdk" > local.properties
-    ```
-
-**4. Build the APK:**
-```bash
-chmod +x gradlew
-./gradlew assembleRelease
-```
-*Wait for the "BUILD SUCCESSFUL" message.*
-
-**5. Locate your file:**
-The new APK is at: `app/build/outputs/apk/release/app-release.apk`
-
----
-
-## ❓ TROUBLESHOOTING
-
-*   **"Connection Failed":** Check your internet. Verify the server IP and TCP/UDP ports are correct.
-*   **"Authentication Failed":** Check your Username and Password.
-*   **"No Audio":** Go to Settings -> Sound System -> Ensure "Speakerphone" is checked if you want loud audio. Check "Microphone Gain".
-*   **"App Crashes on Start":** If you compiled it yourself, did you unzip `jniLibs.zip`? That is the #1 cause of crashes.
-
----
-
-## 🌍 TRANSLATIONS
-
-**Want to use TeamTalk Plus in your native language?**
-
-If you want to help translate the project, please leave a comment on **any post** in our [Telegram Channel](https://t.me/joaoprojects). We would love your help!
-
-If you spot a missing string or a bad translation, let us know there as well.
+1.  **Download:** Get the APK from the **[Telegram Channel](https://t.me/joaoprojects)**.
+2.  **Install:** Open the file on your Android device.
+3.  **Permissions:** Allow "Install from Unknown Sources".
+4.  **Login:** Enter your server IP, TCP Port, UDP Port, Username, and Password.
 
 ---
 
