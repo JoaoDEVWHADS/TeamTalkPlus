@@ -92,87 +92,121 @@ The new APK is at: `app/build/outputs/apk/release/app-release.apk`
 
 ---
 
-### 📱 Part 3: Using the App (User Guide)
+### 📱 Part 3: Accessibility & Screen Readers (TalkBack)
 
-Once you install and open the app, here is how to master it.
+**Is the menu vertical?**
+No. The main navigation uses a **Horizontal Tab System** (ViewPager).
+*   **To change tabs:** Use a **two-finger swipe left or right**, or **double-tap the Tab Headers** at the top of the screen.
+*   **Vertical Lists:** While the tabs are arranged horizontally, the *content* inside them (like the Channel List, File List, and User List) is a standard **Vertical List**. You can swipe up/down to browse these items normally.
 
-#### 1. The Main Screen (Tabs)
-The interface is divided into 3 main tabs. Swipe left/right to switch between them:
+**TalkBack Features:**
+*   **Labeled Buttons:** All major buttons (Transmit, Speaker, Voice Activation) have text labels (`contentDescription`) readable by screen readers.
+*   **Accessibility Assistant:** The app includes a smart `AccessibilityAssistant` that prevents the interface from refreshing too aggressively while you are focusing on a specific item, making it easier to read logs without being interrupted.
+*   **Volume Keys:** Creating an account and logging in is fully accessible.
 
-*   **CHANNELS (Left Tab):** This is the main view. It shows the channel tree, users in your channel, and incoming chat messages.
-*   **FILES (Middle Tab):** Displays files uploaded to the current channel.
-*   **MEDIA (Right Tab):** Controls for streaming music or video files to the channel.
-
-#### 2. Connecting to a Server
-1.  On the startup screen, you see a list of servers.
-2.  **Add Server:** Tap "New Server" (or the `+` button depending on version/layout) to add your own.
-3.  **Preferences:** Tap "Preferences" to see connection options.
-4.  **Connect:** Tap a server to join.
-
-#### 3. In-Channel Actions
-Once connected:
-*   **Talk:** Press and hold the big **"TX" (Transmit)** button at the bottom to speak (Push-to-Talk).
-*   **Chat:** Tap the message box at the bottom, type your text, and tap "Send".
-*   **Join a Channel:** Tap a channel name in the tree -> Tap **"Join"**.
-*   **View User Info:** Tap a user's name to see their details (IP, Client, Latency).
-
-#### 4. File Transfer (Files Tab)
-*   **Download:** Tap a file in the list -> Tap **"Download"**.
-*   **Upload:** Tap the **Options Menu (⋮)** -> **"Upload File"** -> Pick a file from your phone.
-*   **Delete:** Long press a file -> **"Delete"**.
-
-#### 5. Streaming Music (Media Tab)
-Want to play music for everyone?
-1.  Go to the **Media** tab.
-2.  Tap **"Stream Media File"** (or use Menu -> **"Stream"**).
-3.  Select a music file (`.mp3`, `.ogg`, etc.) from your device.
-4.  It will start playing. Use the slider to adjust volume. **Everyone in the channel will hear it.**
-
-#### 6. Settings Deep Dive
-Tap **Menu (⋮)** -> **"settings"** (or "Preferences").
-
-*   **General:**
-    *   **Nickname:** Change the name people see.
-    *   **Gender:** Set Male/Female (affects some TTS engines).
-    *   **Status Mode:** Set yourself to "Away" or "Question".
-
-*   **Sound System:**
-    *   **Master Volume:** How loud TeamTalk is.
-    *   **Microphone Gain:** Boost your mic volume if people say you are quiet.
-    *   **Voice Activation:** Check this to transmit automatically when you speak (no PTT needed). Slider adjusts sensitivity.
-    *   **Echo Cancellation:** Turn this ON if you are not using headphones.
-
-*   **Text-to-Speech (Accessibility):**
-    *   **Events:** Choose what the app reads aloud (e.g., "User joined channel", "New message").
-    *   **Engine:** Select your preferred TTS engine (Google, Samsung, etc.).
+**Tips for Visually Impaired Users:**
+1.  **Channel Tree:** Provide a "Long Press" (Double-tap and hold) on a channel to see "Join", "Admin Options", or "Channel Info".
+2.  **Transmit Button:** The large red "TX" button is at the bottom right. It's easy to find by sliding your finger to the bottom corner.
+3.  **Status:** Use the "Manage Status" tab (Tab 12) to quickly set yourself as "Away" or "Question" without diving into deep menus.
 
 ---
 
-### 👑 Part 4: Administration Guide (For Admins)
+### 🗂️ Part 4: The 12 Tabs of TeamTalk Plus
+
+After connecting to a server, user interface is divided into **12 precise tabs**. You can swipe left/right to navigate them.
+
+#### 1. FILES
+*   **Function:** Shows files uploaded to the current channel.
+*   **Actions:**
+    *   Tap a file to **Download**.
+    *   Tap Menu -> **Upload File** to share a file.
+
+#### 2. CHANNELS
+*   **Function:** The main view showing the server channel tree and users.
+*   **Actions:** long-press on channels or users for options (Join, Move, Ban).
+
+#### 3. MEDIA STREAMS
+*   **Function:** Control center for streaming media files (Music/Video) to the channel.
+*   **Actions:** Tap **Stream Media File** to broadcast music to everyone in the channel.
+
+#### 4. SERVER MANAGEMENT (Admin Only)
+*   **Function:** Administrative tools. Visible only if you have admin rights.
+*   **Buttons:**
+    *   **Server Information:** View/Edit server name and MOTD (`ServerPropActivity`).
+    *   **User Accounts:** Create/Edit/Delete users (`UserAccountsActivity`).
+    *   **Server Banned Users:** Manage server-wide bans (`ServerBannedUsersActivity`).
+    *   **Server Statistics:** View uptime and traffic data (`ServerStatisticsActivity`).
+
+#### 5. GLOBAL
+*   **Function:** Global chat (Broadcast messages).
+*   **Interface:**
+    *   **List:** Shows messages sent to "Everyone".
+    *   **Input Box:** Type message here.
+    *   **Send:** Broadcasts your message to the entire server.
+
+#### 6. EVENT HISTORY
+*   **Function:** A log of server events.
+*   **Content:** Shows "User logged in", "User joined channel", "Use left channel" events with timestamps.
+
+#### 7. CHANNEL MESSAGES
+*   **Function:** Chat specific to your current channel.
+*   **Interface:** Standard chat interface. Only people in your room see these messages.
+
+#### 8. SETTINGS
+*   **Function:** Quick access to App Preferences.
+*   **Sections:**
+    *   **General:** Nickname, Gender, Sound events.
+    *   **Sound System:** Volume, Gain, Echo Cancel.
+    *   **Text-to-Speech:** Configure what the app reads aloud.
+
+#### 9. PRIVATE
+*   **Function:** Manages private conversations (PMs).
+*   **Interface:** Lists users you are currently chatting with privately. Tap a user to open the chat window.
+
+#### 10. CONNECTION STATUS
+*   **Function:** Technical connection details.
+*   **Data:**
+    *   **Connection:** Online/Offline status.
+    *   **Ping:** Your latency in milliseconds (ms).
+    *   **RX/TX:** Total data received and transmitted.
+
+#### 11. ONLINE USERS
+*   **Function:** A simple list of everyone currently on the server.
+*   **Actions:** Easier to browse than the tree view if the server is huge.
+
+#### 12. MANAGE STATUS
+*   **Function:** Quickly update your user status.
+*   **Interface:**
+    *   **Status Mode:** Dropdown to select **Online**, **Away**, or **Question**.
+    *   **Status Message:** Text box to type a custom note (e.g., "Eating lunch").
+    *   **Save:** Updates your status immediately for all users to see.
+
+---
+
+### 👑 Part 5: Administration Guide (Deep Dive)
 
 If you are a Server Administrator, TeamTalk Plus gives you superpowers.
 
-#### 1. User Accounts (`UserAccountsActivity`)
-**Menu (⋮) -> "User Accounts"**
+#### 1. User Accounts
+Found in the **Server Management** tab -> **User Accounts** button.
 *   **Create:** Tap `+`. Fill in Username/Password. Check rights (Admin, Upload, etc.). Save.
 *   **Edit:** Long-press a user -> "Edit".
 *   **Search:** Type in the top bar to find users fast.
 
-#### 2. Server Properties (`ServerPropActivity`)
-**Menu (⋮) -> "Server Properties"**
+#### 2. Server Properties
+Found in the **Server Management** tab -> **Server Information** button.
 *   **Rename Server:** Tab 1 -> Edit "Server Name".
 *   **MOTD:** Tab 1 -> Edit "Message of the Day".
 *   **Bandwidth:** Tab 2 -> specific limits for Voice/Video/Desktop.
 *   **Save:** Don't forget to tap "Save" at the bottom!
 
-#### 3. Moving Users (`MoveUsersActivity`)
+#### 3. Moving Users
 **Menu (⋮) -> "Move Users"**
-*   Great for moving everyone to a "Meeting Room".
 *   **Action:** Select "All Users" or specific people -> Tap "Move" -> Select the destination channel.
 
 #### 4. Bans
-*   **Server Ban:** Menu -> "Server Banned Users". (Bans from whole server).
-*   **Channel Ban:** Long-press Channel -> "Channel Banned Users". (Bans from specific room).
+*   **Server Ban:** Management Tab -> "Server Banned Users".
+*   **Channel Ban:** Long-press Channel -> "Channel Banned Users".
 *   **Unban:** Check the box next to the name -> Tap "Unban".
 
 ---
