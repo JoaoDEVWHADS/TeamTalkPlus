@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <EditTextPreference
+		android:key="nickname_text"
+		android:title="@string/pref_title_nickname"
+		android:selectAllOnFocus="true"
+		android:singleLine="true" />
+
+
+
+	<ListPreference
+		android:key="pref_language"
+		android:title="@string/pref_title_language"
+		android:summary="@string/pref_summary_language"
+		android:entries="@array/language_entries"
+		android:entryValues="@array/language_values"
+		android:defaultValue="default" />
+
+
+	<ListPreference
+		android:key="gender_list"
+		android:title="@string/pref_title_gender"
+		android:summary="@string/pref_summary_gender"
+		android:entries="@array/gender_entries"
+		android:entryValues="@array/gender_values"
+		android:defaultValue="0" />
+
+	<CheckBoxPreference
+		android:key="bearwareid_checkbox"
+		android:defaultValue="false"
+		android:title="@string/pref_title_bearwareid"
+		android:summary="@string/pref_summary_bearwareid" />
+
+    <CheckBoxPreference
+		android:key="movetalk_checkbox"
+		android:defaultValue="true"
+		android:title="@string/pref_title_move_talking"
+		android:summary="@string/pref_summary_move_talking" />
+
+    <CheckBoxPreference
+		android:key="showusernames_checkbox"
+		android:defaultValue="false"
+		android:title="@string/pref_title_show_usernames"
+		android:summary="@string/pref_summary_show_usernames" />
+
+    <CheckBoxPreference
+		android:key="vibrate_checkbox"
+		android:defaultValue="true"
+		android:title="@string/pref_title_vibrate" />
+
+    <CheckBoxPreference
+		android:key="proximity_sensor_checkbox"
+		android:defaultValue="false"
+		android:title="@string/pref_title_proximity_sensor" />
+
+    <CheckBoxPreference
+		android:key="keep_screen_on_checkbox"
+		android:defaultValue="false"
+		android:title="@string/pref_title_keep_screen_on" />
+
+    <CheckBoxPreference
+		android:key="show_log_messages"
+		android:defaultValue="true"
+		android:title="@string/pref_show_log_messages" />
+
+</PreferenceScreen>

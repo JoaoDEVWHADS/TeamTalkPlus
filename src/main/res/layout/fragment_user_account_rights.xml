@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <CheckBox
+            android:id="@+id/chk_right_all"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_user_rights_all" />
+
+        <CheckBox
+            android:id="@+id/chk_right_multi_login"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_multi_login" />
+
+        <CheckBox
+            android:id="@+id/chk_right_change_nickname"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_change_nickname" />
+
+        <CheckBox
+            android:id="@+id/chk_right_view_all"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_view_all_users" />
+
+        <CheckBox
+            android:id="@+id/chk_right_view_hidden"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_view_hidden_channels" />
+
+        <CheckBox
+            android:id="@+id/chk_right_create_chan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_create_temp_chan" />
+
+        <CheckBox
+            android:id="@+id/chk_right_modify_chan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_modify_chans" />
+
+        <CheckBox
+            android:id="@+id/chk_right_update_server_props"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_update_server_properties" />
+
+        <CheckBox
+            android:id="@+id/chk_right_kick"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_kick_users" />
+
+        <CheckBox
+            android:id="@+id/chk_right_ban"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_ban_users" />
+
+        <CheckBox
+            android:id="@+id/chk_right_move_users"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_move_users" />
+
+        <CheckBox
+            android:id="@+id/chk_right_operator_enable"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_operator_enable" />
+
+        <CheckBox
+            android:id="@+id/chk_right_upload_files"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_upload_files" />
+
+        <CheckBox
+            android:id="@+id/chk_right_download_files"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_download_files" />
+
+        <CheckBox
+            android:id="@+id/chk_right_record_voice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_record_voice" />
+
+        <CheckBox
+            android:id="@+id/chk_right_voice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_transmit_voice" />
+
+        <CheckBox
+            android:id="@+id/chk_right_video"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_transmit_video" />
+
+        <CheckBox
+            android:id="@+id/chk_right_desktop"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_transmit_desktop" />
+
+        <CheckBox
+            android:id="@+id/chk_right_desktop_access"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_desktop_access" />
+
+        <CheckBox
+            android:id="@+id/chk_right_media_audio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_media_file_audio" />
+
+        <CheckBox
+            android:id="@+id/chk_right_media_video"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_media_file_video" />
+
+        <CheckBox
+            android:id="@+id/chk_right_text_user"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_textmessage_user" />
+
+        <CheckBox
+            android:id="@+id/chk_right_text_chan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_textmessage_channel" />
+
+        <CheckBox
+            android:id="@+id/chk_right_text_broadcast"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/right_text_broadcast" />
+
+    </LinearLayout>
+</ScrollView>

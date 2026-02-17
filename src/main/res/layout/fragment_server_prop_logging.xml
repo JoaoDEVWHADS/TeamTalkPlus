@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/tab_logging_events"
+            android:textStyle="bold"
+            android:paddingBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/chk_log_user_login"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/log_user_login" />
+        <CheckBox
+            android:id="@+id/chk_log_user_kick"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/log_user_kick" />
+        <CheckBox
+            android:id="@+id/chk_log_channel_create"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/log_channel_create" />
+        <CheckBox
+            android:id="@+id/chk_log_server_update"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/log_server_update" />
+        <CheckBox
+            android:id="@+id/chk_log_file_transfer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/log_file_transfer" />
+
+    </LinearLayout>
+</ScrollView>

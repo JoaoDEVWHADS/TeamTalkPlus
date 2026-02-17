@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/label_cmd_limit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:labelFor="@+id/edit_account_cmd_limit"
+        android:text="@string/commands_limit"
+        android:importantForAccessibility="yes" />
+
+    <EditText
+        android:id="@+id/edit_account_cmd_limit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="number"
+        android:minHeight="48dp"
+        android:importantForAccessibility="yes"
+        android:hint="@string/commands_limit_hint" />
+
+    <TextView
+        android:id="@+id/label_cmd_interval"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:labelFor="@+id/edit_account_cmd_interval"
+        android:text="@string/commands_interval"
+        android:importantForAccessibility="yes" />
+
+    <EditText
+        android:id="@+id/edit_account_cmd_interval"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="number"
+        android:hint="@string/commands_interval_hint" />
+
+</LinearLayout>

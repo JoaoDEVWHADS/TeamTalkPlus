@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/pref_cat_display">
+        <ListPreference
+            android:key="pref_display_font_scale"
+            android:title="@string/pref_title_font_scale"
+            android:summary="@string/pref_summary_font_scale"
+            android:defaultValue="1.0"
+            android:entries="@array/font_scale_entries"
+            android:entryValues="@array/font_scale_values" />
+    </PreferenceCategory>
+</PreferenceScreen>

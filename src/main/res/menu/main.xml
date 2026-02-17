@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+      xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_newchannel"
+        app:showAsAction="ifRoom|withText"
+        android:title="@string/action_new_channel"/>
+    <item
+        android:id="@+id/action_join"
+        app:showAsAction="ifRoom|withText"
+        android:title="@string/action_join"/>
+    <item
+        android:id="@+id/action_edit"
+        app:showAsAction="ifRoom|withText"
+        android:title="@string/action_edit"/>
+    <item
+        android:id="@+id/action_stream"
+        app:showAsAction="ifRoom|withText"
+        android:title="@string/action_stream"/>
+    <item
+        android:id="@+id/action_move"
+        app:showAsAction="ifRoom|withText"
+        android:title="@string/action_move_short"/>
+    <item
+        android:id="@+id/action_banned_users"
+        app:showAsAction="ifRoom|withText"
+        android:title="@string/action_banned_users"/>
+    <item
+        android:id="@+id/action_leave"
+        app:showAsAction="always|withText"
+        android:title="@string/action_leave"/>
+    <item
+        android:id="@+id/action_upload"
+        app:showAsAction="ifRoom|withText"
+        android:title="@string/action_upload"/>
+
+</menu>

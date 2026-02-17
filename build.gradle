@@ -1,0 +1,91 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.2'
+    }
+}
+apply plugin: 'com.android.application'
+android {
+    namespace = 'dk.bearware.gui'
+    compileSdk 34  
+    buildToolsVersion '34.0.0'
+    ndkVersion '26.3.11579264'  
+    buildFeatures {
+        buildConfig = true
+        viewBinding = true
+    }
+    androidResources {
+        generateLocaleConfig = false
+    }
+    defaultConfig {
+        applicationId = 'com.teamtalk.plus'
+        minSdk 21
+        targetSdk 34
+        versionCode 200
+        versionName '5.22'
+        testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled = true
+    }
+    sourceSets {
+        main {
+            java.srcDirs += '../../Library/TeamTalkJNI/src'
+        }
+    }
+    splits {
+        abi {
+            enable = true
+            reset()
+            include 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
+            universalApk = true
+        }
+    }
+    signingConfigs {
+        release {
+            storeFile file("release.keystore")
+            storePassword "teamtalk"
+            keyAlias "teamtalk"
+            keyPassword "teamtalk"
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'teamtalk-proguard-rules.txt'
+        }
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'teamtalk-proguard-rules.txt'
+        }
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    lint {
+        disable 'MissingTranslation', 'ExtraTranslation'
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'androidx.annotation:annotation:1.7.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.fragment:fragment:1.6.2'
+    implementation 'androidx.media:media:1.7.0'
+    implementation 'androidx.preference:preference:1.2.1'
+    implementation 'androidx.viewpager:viewpager:1.0.0'
+    implementation 'com.google.android.material:material:1.11.0'
+    testImplementation 'junit:junit:4.13.2'
+}

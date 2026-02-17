@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="language_entries">
+        <item>System Default</item>
+        <item>English</item>
+        <item>Português (Europeu/Africano)</item>
+        <item>Português (Brasil)</item>
+    </string-array>
+    <string-array name="language_values">
+        <item>default</item>
+        <item>en</item>
+        <item>pt</item>
+        <item>pt_BR</item>
+    </string-array>
+</resources>
