@@ -33,268 +33,157 @@ To ensure you are using a clean, safe, and unmodified version of TeamTalk Plus, 
 
 ---
 
-## 📱 Project Overview
+## 📚 THE GRAND USER MANUAL & GUIDE
 
-**TeamTalk Plus** is a specialized, advanced fork of the official [TeamTalk 5 Android Client](https://github.com/BearWare/TeamTalk5). 
+Welcome to the complete guide for TeamTalk Plus. This section covers everything from installation to advanced administration.
 
-The official TeamTalk client is fantastic for voice and video communication, but it lacks the tools needed for **server owners** to manage their communities from a mobile device. If you needed to ban a user, create an account, or change server bandwidth limits, you previously had to rush to a PC.
+### 🐧 Part 1: Preparation (Linux Environment)
 
-**TeamTalk Plus solves this problem.** It bridges the gap between the mobile and desktop experience, putting full server administration power in the palm of your hand.
+To compile this project yourself, you need a Linux machine (Ubuntu, Debian, or similar). We verify our builds on Ubuntu 22.04 LTS.
 
----
+**1. Install Essential Tools:**
+Open your terminal and run the following command to install Java, Git, and other necessary utilities:
 
-## 📚 Detailed Feature Guide
+```bash
+sudo apt update
+sudo apt install openjdk-17-jdk git git-lfs unzip zip curl
+```
 
-This section explains how to use the advanced features unique to TeamTalk Plus.
+**2. Verify Installations:**
+*   `java -version` should show OpenJDK 17.
+*   `git --version` should show Git installed.
+*   `git lfs --version` should confirm Large File Storage is ready.
 
-### 1. User Account Management (`UserAccountsActivity`)
+### 🛠️ Part 2: Compilation (Step-by-Step)
 
-Stop relying on the desktop client to create accounts for your users. TeamTalk Plus includes a fully functional User Account Manager.
+**⚠️ CRITICAL WARNING:** Do NOT use Android Studio unless you are an expert. Use the command line as shown below to avoid headaches!
 
-**How to access:**
-1.  Connect to your server as an **Administrator**.
-2.  Open the drawer menu (hamburger menu).
-3.  Select **"User Accounts"**.
-
-**Capabilities:**
-
-*   **List Accounts:** View all registered users on the server.
-    *   **Search**: Use the search bar to filter users by username or note.
-    *   **Sort**: Toggle between Ascending (A-Z) and Descending (Z-A) order.
-    *   **Filter**: The list updates in real-time as you type.
-
-*   **Create New Account:**
-    1.  Tap the **"+" (Add)** button.
-    2.  **Username:** Enter the login name (e.g., `john_doe`).
-    3.  **Password:** Set a secure password.
-    4.  **User Type:** Choose between `Default` (Normal user) or `Admin` (Server Administrator).
-    5.  **User Rights:** Check specific permissions (e.g., `Can Create Channels`, `Can Upload Files`).
-    6.  **Note:** Add a reference note (e.g., "Added on 2024-05-20").
-    7.  Tap **Save**.
-
-*   **Edit Existing Account:**
-    1.  Long-press on any user in the list.
-    2.  Select **Edit**.
-    3.  Modify any field (Password, Rights, Notes).
-    4.  Tap **Save**.
-
-*   **Delete Account:**
-    1.  Long-press on a user.
-    2.  Select **Delete**.
-    3.  Confirm the action to permanently remove the account.
-
-### 2. Server Properties Management (`ServerPropActivity`)
-
-Need to change the MOTD or adjust bandwidth limits on the fly? You can do that now.
-
-**How to access:**
-1.  Connect as Admin.
-2.  Menu -> **"Server Properties"**.
-
-**Tabs & Features:**
-
-*   **General Settings:**
-    *   **Server Name:** Rename your server instantly.
-    *   **MOTD:** Update the "Message of the Day" displayed to users upon connection.
-    *   **Max Users:** Set the limit for concurrent connections.
-    *   **Max Logins per IP:** Prevent spam by limiting connections from a single IP address.
-    *   **Auto-Save:** Toggle whether the server saves changes to the database automatically.
-
-*   **Bandwidth Limits:**
-    *   **Voice TX:** Limit voice data usage (Bytes/sec).
-    *   **Video TX:** Limit video steam quality.
-    *   **Media File TX:** Control how fast files can be streamed.
-    *   **Desktop TX:** Limit desktop sharing bandwidth.
-    *   **Total TX:** Set a hard cap for the entire server's outgoing traffic.
-
-*   **Abuse Prevention:**
-    *   **Max Login Attempts:** Kick users who fail password entry too many times.
-    *   **Login Delay:** Enforce a wait time between login attempts to stop brute-force attacks.
-    *   **User Timeout:** Automatically kick inactive (ghost) users after X seconds.
-
-*   **Logging:**
-    *   Configure what the server logs to its file/console (User logins, Kicks, Channel creation, File transfers, etc.).
-
-**Note:** Changes usually take effect immediately, but some settings may restart the server service depending on your hosting setup.
-
-### 3. Move Users (`MoveUsersActivity`)
-
-Moving users one by one is tedious. The **Move Users** tool allows you to mass-migrate people between channels.
-
-**How to access:**
-1.  Connect as Admin/Operator.
-2.  Menu -> **"Move Users"**.
-
-**Workflow:**
-
-1.  **Select Users:**
-    *   **Filter by Server:** Shows everyone online.
-    *   **Filter by Current Channel:** Shows only people in your channel.
-    *   **Pick Channel:** Select a specific source channel to grab users from.
-    *   **Multi-Select:** Tap users to select them individually, or use "Select All" / "Select None".
-
-2.  **Choose Destination:**
-    *   Tap the **"Move Users"** button.
-    *   A channel browser will appear.
-    *   Navigate through the channel tree (sub-channels supported).
-    *   Tap the desired destination channel.
-
-3.  **Execute:**
-    *   Confirm the move. All selected users will be instantly teleported to the target channel.
-
-This is incredibly useful for event management, moving AFK users to a lobby, or gathering teams.
-
-### 4. Banned Users Management
-
-TeamTalk Plus splits bans into two categories for easier management.
-
-#### Server Bans (`ServerBannedUsersActivity`)
-**Menu -> "Server Bans"**
-*   This list shows users banned from the **entire server**.
-*   **Information Displayed:**
-    *   Nickname & IP Address.
-    *   Username (if registered).
-    *   Ban Time & Duration.
-    *   Banned By (Admin name).
-*   **Unban:** Select one or multiple bans and tap "Unban" to restore access.
-
-#### Channel Bans (`ChannelBannedUsersActivity`)
-**Context Menu on Channel -> "Channel Bans"**
-*   Shows users banned specifically from entering that channel.
-*   Useful for private rooms or VIP areas.
-*   Admins can view and revoke these bans without needing to be Channel Operators.
-
-### 5. Server Statistics (`ServerStatisticsActivity`)
-
-Get a real-time health check of your server.
-
-**How to access:**
-Menu -> **"Server Statistics"**
-
-**Metrics:**
-*   **Uptime:** How long the server has been running.
-*   **Users:** Current online count / Peak users.
-*   **Bandwidth:** current Upload/Download rates.
-*   **Audio/Video:** Total audio/video streams active.
-*   **Files:** Total file transfers active.
-
----
-
-## 🐙 Git LFS & Compilation Guide (Read Carefully!)
-
-This project uses **Git Large File Storage (LFS)** to manage big files, specifically the native libraries (`jniLibs.zip`) required for compilation. If you just do a normal `git clone`, you might end up with a small pointer file instead of the actual ZIP file, causing compilation errors.
-
-### 📦 Part 1: Installing Git LFS
-
-You must install Git LFS on your system **BEFORE** cloning the repository.
-
-#### 🪟 Windows Users:
-
-1.  **Download Git:** Make sure you have Git for Windows installed.
-2.  **Download LFS:** Go to [git-lfs.github.com](https://git-lfs.github.com/) and download the Windows installer.
-3.  **Install:** Run the `.exe` file and follow the wizard.
-4.  **Activate:** Open Command Prompt (cmd) or PowerShell and run:
-    ```powershell
-    git lfs install
-    ```
-    *If it says "Git LFS initialized", you are ready!*
-
-#### 🐧 Linux Users (Ubuntu/Debian):
-
-1.  **Open Terminal.**
-2.  **Install LFS:**
-    ```bash
-    sudo apt update
-    sudo apt install git-lfs
-    ```
-3.  **Activate:**
-    ```bash
-    git lfs install
-    ```
-
-#### 🍎 macOS Users:
-
-1.  **Use Homebrew:**
-    ```bash
-    brew install git-lfs
-    ```
-2.  **Activate:**
-    ```bash
-    git lfs install
-    ```
-
----
-
-### 📥 Part 2: Cloning & Extracting Libraries
-
-Once Git LFS is installed, follow these steps to get the code and prepare for compilation.
-
-#### Step 1: Clone the Repository
-Because you installed LFS, Git will automatically download the large `jniLibs.zip` file along with the source code.
-
+**1. Clone the Repository:**
 ```bash
 git clone https://github.com/YourUsername/TeamTalkPlus.git
 cd TeamTalkPlus
 ```
 
-> **Check:** Go to the `libs` or `src/main` folder (depending on where the zip is located). The file `jniLibs.zip` (or similar) should be **several megabytes**, not just a few bytes.
-
-#### Step 2: Extract the Libraries
-The Android native libraries (`.so` files) are compressed to save space. You **MUST** unzip them before compiling.
-
-**Where to unzip?**
-Look for the `jniLibs.zip` in the root or `app/src/main/` folder. Extract its contents into:
-`app/src/main/jniLibs/`
-
-Typically, the structure should look like this after extraction:
-```
-TeamTalkPlus/
-  └── app/
-      └── src/
-          └── main/
-              └── jniLibs/
-                  ├── arm64-v8a/
-                  │   └── libTeamTalk5-jni.so
-                  ├── armeabi-v7a/
-                  │   └── libTeamTalk5-jni.so
-                  ├── x86/
-                  │   └── libTeamTalk5-jni.so
-                  └── x86_64/
-                      └── libTeamTalk5-jni.so
+**2. Extract Native Libraries (Crucial Step):**
+The app will CRASH if you skip this. The native audio/video libraries are zipped to save space.
+```bash
+cd app/src/main
+unzip jniLibs.zip -d . 
+# You should now see a 'jniLibs' folder here.
+cd ../../..
 ```
 
-If these files are missing, the app will compile but **crash immediately** on startup.
+**3. Set SDK Location:**
+Tell the build system where your Android SDK is.
+*   If you successfully installed the SDK to `~/Android/Sdk`, run:
+    ```bash
+    echo "sdk.dir=$HOME/Android/Sdk" > local.properties
+    ```
+
+**4. Build the APK:**
+```bash
+chmod +x gradlew
+./gradlew assembleRelease
+```
+*Wait for the "BUILD SUCCESSFUL" message.*
+
+**5. Locate your file:**
+The new APK is at: `app/build/outputs/apk/release/app-release.apk`
 
 ---
 
-### 🛠️ Part 3: Compiling the APK
+### 📱 Part 3: Using the App (User Guide)
 
-Now that you have the source code and the libraries in place, you can compile the APK.
+Once you install and open the app, here is how to master it.
 
-1.  **Open Terminal / Command Prompt** inside the `TeamTalkPlus` folder.
-    
-2.  **Set up SDK Location (local.properties):**
-    Create a file named `local.properties` in the root folder (if it doesn't exist) and add the path to your Android SDK.
-    
-    *   **Linux:** `sdk.dir=/home/username/Android/Sdk`
-    *   **Windows:** `sdk.dir=C:\\Users\\Username\\AppData\\Local\\Android\\Sdk`
+#### 1. The Main Screen (Tabs)
+The interface is divided into 3 main tabs. Swipe left/right to switch between them:
 
-3.  **Build Release APK:**
-    
-    **Linux/Mac:**
-    ```bash
-    chmod +x gradlew
-    ./gradlew assembleRelease
-    ```
-    
-    **Windows:**
-    ```powershell
-    gradlew.bat assembleRelease
-    ```
+*   **CHANNELS (Left Tab):** This is the main view. It shows the channel tree, users in your channel, and incoming chat messages.
+*   **FILES (Middle Tab):** Displays files uploaded to the current channel.
+*   **MEDIA (Right Tab):** Controls for streaming music or video files to the channel.
 
-4.  **Find the APK:**
-    Success! Your APK is ready at:
-    `app/build/outputs/apk/release/app-release.apk`
+#### 2. Connecting to a Server
+1.  On the startup screen, you see a list of servers.
+2.  **Add Server:** Tap "New Server" (or the `+` button depending on version/layout) to add your own.
+3.  **Preferences:** Tap "Preferences" to see connection options.
+4.  **Connect:** Tap a server to join.
+
+#### 3. In-Channel Actions
+Once connected:
+*   **Talk:** Press and hold the big **"TX" (Transmit)** button at the bottom to speak (Push-to-Talk).
+*   **Chat:** Tap the message box at the bottom, type your text, and tap "Send".
+*   **Join a Channel:** Tap a channel name in the tree -> Tap **"Join"**.
+*   **View User Info:** Tap a user's name to see their details (IP, Client, Latency).
+
+#### 4. File Transfer (Files Tab)
+*   **Download:** Tap a file in the list -> Tap **"Download"**.
+*   **Upload:** Tap the **Options Menu (⋮)** -> **"Upload File"** -> Pick a file from your phone.
+*   **Delete:** Long press a file -> **"Delete"**.
+
+#### 5. Streaming Music (Media Tab)
+Want to play music for everyone?
+1.  Go to the **Media** tab.
+2.  Tap **"Stream Media File"** (or use Menu -> **"Stream"**).
+3.  Select a music file (`.mp3`, `.ogg`, etc.) from your device.
+4.  It will start playing. Use the slider to adjust volume. **Everyone in the channel will hear it.**
+
+#### 6. Settings Deep Dive
+Tap **Menu (⋮)** -> **"settings"** (or "Preferences").
+
+*   **General:**
+    *   **Nickname:** Change the name people see.
+    *   **Gender:** Set Male/Female (affects some TTS engines).
+    *   **Status Mode:** Set yourself to "Away" or "Question".
+
+*   **Sound System:**
+    *   **Master Volume:** How loud TeamTalk is.
+    *   **Microphone Gain:** Boost your mic volume if people say you are quiet.
+    *   **Voice Activation:** Check this to transmit automatically when you speak (no PTT needed). Slider adjusts sensitivity.
+    *   **Echo Cancellation:** Turn this ON if you are not using headphones.
+
+*   **Text-to-Speech (Accessibility):**
+    *   **Events:** Choose what the app reads aloud (e.g., "User joined channel", "New message").
+    *   **Engine:** Select your preferred TTS engine (Google, Samsung, etc.).
+
+---
+
+### 👑 Part 4: Administration Guide (For Admins)
+
+If you are a Server Administrator, TeamTalk Plus gives you superpowers.
+
+#### 1. User Accounts (`UserAccountsActivity`)
+**Menu (⋮) -> "User Accounts"**
+*   **Create:** Tap `+`. Fill in Username/Password. Check rights (Admin, Upload, etc.). Save.
+*   **Edit:** Long-press a user -> "Edit".
+*   **Search:** Type in the top bar to find users fast.
+
+#### 2. Server Properties (`ServerPropActivity`)
+**Menu (⋮) -> "Server Properties"**
+*   **Rename Server:** Tab 1 -> Edit "Server Name".
+*   **MOTD:** Tab 1 -> Edit "Message of the Day".
+*   **Bandwidth:** Tab 2 -> specific limits for Voice/Video/Desktop.
+*   **Save:** Don't forget to tap "Save" at the bottom!
+
+#### 3. Moving Users (`MoveUsersActivity`)
+**Menu (⋮) -> "Move Users"**
+*   Great for moving everyone to a "Meeting Room".
+*   **Action:** Select "All Users" or specific people -> Tap "Move" -> Select the destination channel.
+
+#### 4. Bans
+*   **Server Ban:** Menu -> "Server Banned Users". (Bans from whole server).
+*   **Channel Ban:** Long-press Channel -> "Channel Banned Users". (Bans from specific room).
+*   **Unban:** Check the box next to the name -> Tap "Unban".
+
+---
+
+## 🌍 Translations
+
+**Want to use TeamTalk Plus in your native language?**
+
+If you want to help translate the project, please leave a comment on **any post** in our [Telegram Channel](https://t.me/joaoprojects). We would love your help!
+
+If you spot a missing string or a bad translation, let us know there as well.
 
 ---
 
