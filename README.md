@@ -5,37 +5,57 @@
 
 ---
 
-## ⛔ LIABILITY & SECURITY DISCLAIMER ⛔
+## 🏆 THE "PC EXPERIENCE" ON ANDROID
 
-**PLEASE READ THIS SECTION CAREFULLY BEFORE USING THIS SOFTWARE.**
+**TeamTalk Plus was built with a single philosophy: Why should mobile status mean fewer features?**
 
-### 1. The `release.keystore` Incident
-This repository contains a file named `release.keystore`. **We (the developers of this fork) did NOT publicly share this key.** It was leaked and distributed by third parties without our consent. 
+The official TeamTalk 5 Android client is designed as a "lightweight" companion apps perfect for listening and basic chatting. However, for server administrators, channel operators, and power users, it often feels limiting. You cannot ban users by IP, you cannot manage user accounts, and you cannot configure complex server properties.
 
-Because this signing key is now public knowledge:
-*   **ANYONE** can sign an APK that looks like an official update.
-*   **ANYONE** can inject malicious code and sign it with this key.
-*   We cannot guarantee that an APK you find on the internet signed with this key is safe, unless it comes directly from us.
+**TeamTalk Plus changes that.**
 
-### 2. No Warranty or Liability
-**This software is provided "AS IS", without warranty of any kind, express or implied.**
+We have painstakingly ported the deep, granular control of the **TeamTalk 5 Windows Client** to the Android platform. If you are used to managing your server from your desktop PC, you will feel right at home here. This is not just a client; it is a full-featured administration tool in your pocket.
 
-*   **We are NOT responsible** for any damage, data loss, ban, or security compromise that may occur from using this software.
-*   **We are NOT responsible** for any malicious modifications made by third parties using the leaked keystore.
-*   By downloading, compiling, or installing this software, you acknowledge that you do so **AT YOUR OWN RISK**.
+### 🆚 Feature Comparison: The Ultimate Breakdown
 
-### 3. The ONLY Trusted Source
-To ensure you are using a clean, safe, and unmodified version of TeamTalk Plus, **ALWAYS** download releases from our official channel:
+| Feature | 🤖 Official Android | 💠 TeamTalk Plus | 💻 TeamTalk Windows |
+| :--- | :---: | :---: | :---: |
+| **User Account Management** | ❌ No | ✅ **Full Admin** | ✅ Full Admin |
+| **Create/Delete User Accounts** | ❌ No | ✅ **Yes** | ✅ Yes |
+| **Ban Management** | ⚠️ Basic (Kick) | ✅ **Advanced** | ✅ Advanced |
+| **Ban Types Supported** | Kick Only | IP / Name / Channel | IP / Name / Channel |
+| **Server Properties Access** | ❌ No | ✅ **Edit MOTD/Name** | ✅ Full Access |
+| **Channel Admin** | ⚠️ Limited | ✅ **Full Control** | ✅ Full Control |
+| **Create Static Channels** | ❌ No | ✅ **Yes** | ✅ Yes |
+| **Audio Processing** | ⚠️ Standard | ✅ **Pro (AEC/NS)** | ✅ Pro (AEC/NS) |
+| **Microphone Gain Control** | ⚠️ Auto Only | ✅ **Manual Slider** | ✅ Manual Slider |
+| **Genders & Status Icons** | ❌ Generic | ✅ **Male/Female/Neutral** | ✅ Male/Female/Neutral |
+| **Text-to-Speech Events** | ⚠️ Minimal | ✅ **User Configurable** | ✅ User Configurable |
+| **Blind Accessibility** | ⚠️ Standard | ✅ **TalkBack Optimized** | ✅ NVDA/JAWS Optimized |
+| **Navigation Structure** | 3 Basic Tabs | **12 Pro Tabs** | Multiple Windows |
+| **Bluetooth SCO Support** | ❌ Limited | ✅ **Enhanced** | N/A |
+| **File Transfer Logic** | ⚠️ Download Only | ✅ **Up/Down/Delete** | ✅ Up/Down/Delete |
+| **Language Support** | ⚠️ English Only | ✅ **Multi-Language** | ✅ Multi-Language |
+| **Media Streaming** | ❌ No | ✅ **Stream Music Files** | ✅ Stream Music |
 
-👉 **[Official Telegram Channel: @joaoprojects](https://t.me/joaoprojects)** 👈
+### 🚀 Why "Plus" Matters (Windows Heritage)
 
-**DO NOT** trust APKs sent by users in private messages or found on other websites.
+**1. The "12-Tab" Dashboard**
+On Windows, you have different windows for Chat, Files, and Server Stats. On a small phone screen, cramming this all into one view is impossible. TeamTalk Plus solves this by implementing a **12-Page Swipe Interface**. This mimics the "Multi-Window" multitasking of the desktop client. You can monitor the "Event History" log on Page 6 while keeping an eye on "Online Users" on Page 11, just like alt-tabbing on your PC.
+
+**2. True Server Administration**
+On the official client, if a troll enters your server, your options are limited. On TeamTalk Plus, you have the **Server Management (Page 4)** tab. This gives you direct access to the `USERRIGHT_BAN_USERS` and `USERRIGHT_KICK_USERS` commands in their full capacity. You don't just "kick" them; you can ban their specific IP address from the server entirely, or lock them out of a specific channel, exactly as you would on Windows.
+
+**3. Audio Engineering for Mobile**
+The Windows client is famous for its crisp audio configuration. TeamTalk Plus brings **Voice Processing** options to Android. You can manually toggle Echo Cancellation (AEC), Noise Suppression (NS), and Automatic Gain Control (AGC) in the settings, giving you that "Broadcast Quality" sound even on a mobile device.
+
+**4. 100% Syntax Compatibility**
+TeamTalk Plus uses the exact same `strings.xml` structure and error codes as the Windows Client. When you see an error like `MAX_USERS_EXCEEDED` or a permission like `USERRIGHT_OPERATOR_ENABLE`, it is identical to the documentation you have been reading for years on the PC. You don't need to learn a new "mobile app language"; you already know how to use this app.
 
 ---
 
 ## ♿ ACCESSIBILITY GUIDE (TalkBack & Screen Readers)
 
-This application is designed from the ground up to be "100% Accessible" with Android's accessibility services (TalkBack). Here is the official guide for visually impaired users.
+This application is designed from the ground up to be "100% Accessible" with Android's accessibility services (TalkBack). We have worked closely with visually impaired users to ensure that every button, label, and state is properly announced.
 
 ### 1. Navigation Concepts
 *   **Horizontal Tabs, Vertical Lists:** The main interface uses a "Page" system. To switch between views (Files, Channels, Chat, etc.), perform a **two-finger swipe left or right**. You can also explore by touch near the top to find the tab headers.
@@ -44,9 +64,9 @@ This application is designed from the ground up to be "100% Accessible" with And
 
 ### 2. How to Join a Channel
 There are two distinct ways to enter a channel using accessibility gestures:
-1.  **Swipe Navigation:** Swipe right until you hear the Channel Name. Swipe right *again* to find the **"Join"** button located immediately next to it. Double-tap to join.
-    *   *Right-to-Left Swipe:* You will hear **Channel Name -> Join Button**.
-    *   *Left-to-Right Swipe:* You will hear **Join Button -> Channel Name**.
+1.  **Swipe Navigation:** Swipe right until you hear the Channel Name. Swipe right *again* to find the **"Join Button"** located immediately next to it. Double-tap to join.
+    *   *Right-to-Left Swipe:* You will hear **"Channel Name" -> "Join Button"**.
+    *   *Left-to-Right Swipe:* You will hear **"Join Button" -> "Channel Name"**.
 2.  **Long Press Shortcut:** Locate the Channel Name -> **Double-tap and hold the second tap** to open the Context Menu -> Select **"Join"**.
 
 ### 3. The "Long Press" Gesture
