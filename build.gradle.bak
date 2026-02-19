@@ -33,7 +33,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
         coreLibraryDesugaringEnabled = true
     }
-
+    sourceSets {
+        main {
+            java.srcDirs += '../../Library/TeamTalkJNI/src'
+        }
+    }
     splits {
         abi {
             enable = true
@@ -84,5 +88,4 @@ dependencies {
     implementation 'androidx.viewpager:viewpager:1.0.0'
     implementation 'com.google.android.material:material:1.11.0'
     testImplementation 'junit:junit:4.13.2'
-    implementation files('libs/TeamTalk5.jar')
 }

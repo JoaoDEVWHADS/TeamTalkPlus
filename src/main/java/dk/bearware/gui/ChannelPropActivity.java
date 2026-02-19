@@ -27,6 +27,9 @@ import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.CompoundButton;
 import android.widget.Toast;
 
 public class ChannelPropActivity
@@ -170,6 +173,26 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
         CheckBox chanNoVoiceAct = findViewById(R.id.chan_novoiceact);
         CheckBox chanNoAudioRec = findViewById(R.id.chan_noaudiorecord);
         CheckBox chanHidden = findViewById(R.id.chan_hidden);
+        
+        CheckBox chanFixedVolume = findViewById(R.id.chan_fixed_volume);
+        SeekBar chanGainLevel = findViewById(R.id.chan_gain_level);
+        TextView chanGainLevelValue = findViewById(R.id.chan_gain_level_value);
+        
+        chanFixedVolume.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            chanGainLevel.setEnabled(isChecked);
+            chanGainLevelValue.setEnabled(isChecked);
+        });
+        
+        chanGainLevel.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                 chanGainLevelValue.setText(String.valueOf(progress));
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
 
         if (store) {
             channel.szName = chanName.getText().toString();
@@ -216,6 +239,9 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
                 channel.uChannelType |= ChannelType.CHANNEL_HIDDEN;
             else
                 channel.uChannelType &= ~ChannelType.CHANNEL_HIDDEN;
+                
+            channel.audiocfg.bEnableAGC = chanFixedVolume.isChecked();
+            channel.audiocfg.nGainLevel = chanGainLevel.getProgress();
         }
         else {
             chanName.setFocusable(channel.nParentID > 0);
@@ -233,6 +259,12 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
             chanNoVoiceAct.setChecked((channel.uChannelType & ChannelType.CHANNEL_NO_VOICEACTIVATION) != 0);
             chanNoAudioRec.setChecked((channel.uChannelType & ChannelType.CHANNEL_NO_RECORDING) != 0);
             chanHidden.setChecked((channel.uChannelType & ChannelType.CHANNEL_HIDDEN) != 0);
+            
+            chanFixedVolume.setChecked(channel.audiocfg.bEnableAGC);
+            chanGainLevel.setProgress(channel.audiocfg.nGainLevel);
+            chanGainLevelValue.setText(String.valueOf(channel.audiocfg.nGainLevel));
+            chanGainLevel.setEnabled(channel.audiocfg.bEnableAGC);
+            chanGainLevelValue.setEnabled(channel.audiocfg.bEnableAGC);
         }
     }
 

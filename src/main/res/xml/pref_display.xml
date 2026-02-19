@@ -1,12 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-    <PreferenceCategory android:title="@string/pref_cat_display">
+    <PreferenceCategory android:title="@string/pref_header_display">
+        
         <ListPreference
+            android:key="pref_language"
+            android:title="@string/pref_title_language"
+            android:summary="@string/pref_summary_language"
+            android:entries="@array/language_entries"
+            android:entryValues="@array/language_values"
+            android:defaultValue="default" />
+
+        <ListPreference
+            android:key="pref_channel_sort"
+            android:title="@string/pref_title_channel_sort"
+            android:summary="@string/pref_summary_channel_sort"
+            android:entries="@array/channel_sort_entries"
+            android:entryValues="@array/channel_sort_values"
+            android:defaultValue="0" />
+
+        <dk.bearware.gui.SeekBarPreference
             android:key="pref_display_font_scale"
             android:title="@string/pref_title_font_scale"
             android:summary="@string/pref_summary_font_scale"
-            android:defaultValue="1.0"
-            android:entries="@array/font_scale_entries"
-            android:entryValues="@array/font_scale_values" />
+            android:defaultValue="100"
+            android:max="300" />
+            
     </PreferenceCategory>
 </PreferenceScreen>

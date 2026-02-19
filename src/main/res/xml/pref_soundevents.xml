@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
 
+
+    <ListPreference
+        android:key="pref_sound_pack"
+        android:title="@string/pref_title_sound_pack"
+        android:summary="@string/pref_summary_sound_pack"
+        android:defaultValue="Default" />
+
     <CheckBoxPreference
+
         android:defaultValue="true"
         android:key="userjoin_icon"
         android:title="@string/pref_title_userjoin_icon"
@@ -90,6 +98,12 @@
         android:key="userloggedoff_icon"
         android:title="@string/pref_title_userloggedoff_icon"
         android:summary="@string/pref_summary_userloggedoff_icon"
+        />
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="mute_all_audio_icon"
+        android:title="@string/pref_title_mute_all_audio_icon"
+        android:summary="@string/pref_summary_mute_all_audio_icon"
         />
 
 </PreferenceScreen>

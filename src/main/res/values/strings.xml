@@ -50,7 +50,13 @@
     <string name="action_upload">Upload File</string>
     <string name="alert_file_override">File %1$s already exists. Override it?</string>
     <string name="anonymous_account">Anonymous</string>
-    <string name="app_name">TeamTalk 5</string>
+    <string name="app_name">Team Talk Plus</string>
+    <string name="pref_title_sound_pack">Sound Pack</string>
+    <string name="pref_summary_sound_pack">Select a custom sound pack</string>
+    <string name="sound_pack_default">Default</string>
+    <string name="pref_title_mute_all_audio_icon">Mute All</string>
+    <string name="pref_summary_mute_all_audio_icon">Play sound when speakers are muted</string>
+    <string name="permission_read_storage_rationale">Storage permission is required to load custom sound packs.</string>
     <string name="title_activity_user_prop">User Properties</string>
     <string name="mic_input_selection">Microphone Input Selection</string>
     <string name="mic_input_default">Default (System Decision)</string>
@@ -97,6 +103,8 @@
     <string name="channel_prop_title_oprecvonly">Operator Receives Only</string>
     <string name="channel_prop_title_password">Password</string>
     <string name="channel_prop_title_permanent">Permanent Channel</string>
+    <string name="channel_prop_title_fixed_volume">Fixed Audio Volume</string>
+    <string name="channel_prop_title_gain_level">Gain Level</string>
     <string name="channel_prop_title_topic">Topic</string>
     <string name="channel_remove_confirmation">Do you really wish to remove channel %1$s?</string>
     <string name="chanoppswlab">Operator\'s password:</string>
@@ -162,7 +170,7 @@
     <string name="err_resolve_file_path">Failed to resolve file path</string>
     <string name="err_send_text_message">Failed to send text message</string>
     <string name="err_server_banned">Your IP address is banned</string>
-    <string name="err_service_not_available">TeamTalk Plus Service not available</string>
+    <string name="err_service_not_available">Team Talk Plus Service not available</string>
     <string name="err_stream_media">Failed to stream a media file</string>
     <string name="err_update_server_props_failed">Failed to update server properties</string>
     <string name="err_user_account_request_failed">Failed to send user account request</string>
@@ -175,28 +183,7 @@
     <string name="filter_current_channel">Current Channel</string>
     <string name="filter_pick_channel">Select Channel...</string>
     <string name="filter_server">Server</string>
-    <string-array name="font_scale_entries">
-        <item>50%</item>
-        <item>75%</item>
-        <item>100% (Default)</item>
-        <item>125%</item>
-        <item>150%</item>
-        <item>175%</item>
-        <item>200%</item>
-        <item>250%</item>
-        <item>300%</item>
-    </string-array>
-    <string-array name="font_scale_values">
-        <item>0.5</item>
-        <item>0.75</item>
-        <item>1.0</item>
-        <item>1.25</item>
-        <item>1.5</item>
-        <item>1.75</item>
-        <item>2.0</item>
-        <item>2.5</item>
-        <item>3.0</item>
-    </string-array>
+
     <string-array name="gender_entries">
         <item>Man</item>
         <item>Woman</item>
@@ -315,7 +302,7 @@
     <string name="permission_filetx">Upload and importing files will be unavailable</string>
     <string name="permission_imagetx">Images upload will be unavailable</string>
     <string name="permission_internet">Client will be unable to connect to servers</string>
-    <string name="permission_post_notifications">TeamTalk Plus will not be able to send notifications</string>
+    <string name="permission_post_notifications">Team Talk Plus will not be able to send notifications</string>
     <string name="permission_read_phone_state">Incoming phone call detection will be impossible</string>
     <string name="permission_vibrate">Vibrate during push-to-talk will be unavailable</string>
     <string name="permission_videotx">Video files will not be available for upload and streaming</string>
@@ -542,7 +529,7 @@
     <string name="server_auto_save">Auto-save server changes</string>
     <string name="server_bandwidth_limits">Server Bandwidth Limitations</string>
     <string name="server_export_confirmation">Server has been exported to %1$s</string>
-    <string name="server_list_empty">TeamTalk Plus Server List is empty</string>
+    <string name="server_list_empty">Team Talk Plus Server List is empty</string>
     <string name="server_logging">Server Logging</string>
     <string name="server_login_delay">Login delay per IP address (msec)</string>
     <string name="server_max_desktop_tx">Maximum Desktop TX</string>
@@ -570,8 +557,8 @@
     <string name="sort_server_location">Location/Country</string>
     <string name="sort_server_name_asc">Name (A-Z)</string>
     <string name="sort_server_name_desc">Name (Z-A)</string>
-    <string name="speaker_mute">Mute speakers</string>
-    <string name="speaker_unmute">Unmute speakers</string>
+    <string name="speaker_mute">Mute</string>
+    <string name="speaker_unmute">Unmute</string>
     <string name="speaker_volume_description">Speaker volume is %1$s</string>
     <string name="speexinterval">Transmit interval</string>
     <string name="speexquality">Quality</string>
@@ -706,11 +693,11 @@
     <string name="title_activity_audio_codec">Audio Codec</string>
     <string name="title_activity_channel_banned_users">Channel Banned Users</string>
     <string name="title_activity_channel_prop">Channel Properties</string>
-    <string name="title_activity_main">TeamTalk Plus for Android</string>
+    <string name="title_activity_main">Team Talk Plus for Android</string>
     <string name="title_activity_preferences">Preferences</string>
     <string name="title_activity_server_banned_users">Server Banned Users</string>
-    <string name="title_activity_server_entry">TeamTalk Plus Server Properties</string>
-    <string name="title_activity_server_list">TeamTalk Plus</string>
+    <string name="title_activity_server_entry">Team Talk Plus Server Properties</string>
+    <string name="title_activity_server_list">Team Talk Plus</string>
     <string name="title_activity_server_stats">Server Statistics</string>
     <string name="title_activity_stream_media">Stream media file to channel</string>
     <string name="title_activity_text_message">Text Message</string>
@@ -743,8 +730,8 @@
     <string name="total_rx_bytes">Total RX</string>
     <string name="total_tx_bytes">Total TX</string>
     <string name="transfer_stopped">Transfer stopped</string>
-    <string name="ttdllversion">TeamTalk Plus DLL v</string>
-    <string name="ttversion">TeamTalk Plus v</string>
+    <string name="ttdllversion">Team Talk Plus DLL v</string>
+    <string name="ttversion">Team Talk Plus v</string>
     <string name="tx_off">Transmit inactive</string>
     <string name="tx_on">Transmitting</string>
     <string name="type_admin">Admin</string>
@@ -811,6 +798,12 @@
     <string name="userrigh_send_broadcast_text">Send broadcast text messages</string>
     <string name="userrigh_send_channel_text">Send channel text messages</string>
     <string name="userrigh_send_private_text">Send private text messages</string>
+
+    <!-- Generic Format Strings for TTS/Accessibility -->
+    <string name="tts_fmt_2">%1$s %2$s</string>
+    <string name="tts_fmt_3">%1$s %2$s %3$s</string>
+    <string name="user_accessibility_desc">%1$s %2$s %3$s %4$s</string>
+    <string name="user_status_fmt">%1$s %2$s</string>
     <string name="userrigh_stream_audio">Stream audio files (wav, mp3 files)</string>
     <string name="userrigh_stream_video">Stream video files (avi, mp4 files)</string>
     <string name="userrigh_transmit_desktop">Transmit desktop sessions (shared desktop)</string>
@@ -843,4 +836,12 @@
     <string name="zero_disabled">(0 = disabled)</string>
     <string name="zero_for_no_limit">0 for no limit</string>
     <string name="zero_for_unlimited">0 for unlimited</string>
+    <string name="pref_header_display">Appearance</string>
+    <string name="pref_title_channel_sort">Filter Channel By</string>
+    <string name="pref_summary_channel_sort">Choose how channels are sorted</string>
+    <string name="sort_default">Default (A-Z)</string>
+    <string name="sort_za">Name (Z-A)</string>
+    <string name="sort_popularity">Popularity</string>
+    <string name="tab_more">More...</string>
+    <string name="tab_less">Less...</string>
 </resources>

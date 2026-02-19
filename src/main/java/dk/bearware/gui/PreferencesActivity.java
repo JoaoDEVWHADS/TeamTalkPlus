@@ -10,6 +10,7 @@ import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
@@ -31,6 +32,7 @@ import androidx.appcompat.app.AppCompatDelegate;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.io.File;
 
 import dk.bearware.ClientEvent;
 import dk.bearware.StreamType;
@@ -68,6 +70,14 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        final Thread.UncaughtExceptionHandler defaultHandler = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
+            Log.e(TAG, "FATAL EXCEPTION IN PREFERENCES ACTIVITY", e);
+            if (defaultHandler != null) {
+                defaultHandler.uncaughtException(thread, e);
+            }
+        });
+
         getDelegate().installViewFactory();
         getDelegate().onCreate(savedInstanceState);
         super.onCreate(savedInstanceState);
@@ -227,13 +237,18 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
     @Override
     protected boolean isValidFragment(String fragmentName) {
         String nameWithDot = fragmentName.replace('$', '.');
-        return GeneralPreferenceFragment.class.getName().replace('$', '.').equals(nameWithDot) ||
+        boolean isValid = GeneralPreferenceFragment.class.getName().replace('$', '.').equals(nameWithDot) ||
             SoundEventsPreferenceFragment.class.getName().replace('$', '.').equals(nameWithDot) ||
             ConnectionPreferenceFragment.class.getName().replace('$', '.').equals(nameWithDot) ||
             ServerListPreferenceFragment.class.getName().replace('$', '.').equals(nameWithDot) ||
             TtsPreferenceFragment.class.getName().replace('$', '.').equals(nameWithDot) ||
             SoundSystemPreferenceFragment.class.getName().replace('$', '.').equals(nameWithDot) ||
+            DisplayPreferenceFragment.class.getName().replace('$', '.').equals(nameWithDot) ||
             AboutPreferenceFragment.class.getName().replace('$', '.').equals(nameWithDot);
+        if (!isValid) {
+            Log.w(TAG, "Invalid fragment: " + fragmentName + " (" + nameWithDot + ")");
+        }
+        return isValid;
     }
 
     @Override
@@ -259,16 +274,18 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
     }
 
     private static final Preference.OnPreferenceChangeListener sBindPreferenceSummaryToValueListener = (preference, value) -> {
-        String stringValue = value.toString();
+        try {
+            String stringValue = value.toString();
 
-        if(preference instanceof ListPreference listPreference) {
+            if(preference instanceof ListPreference listPreference) {
 
-            int index = listPreference.findIndexOfValue(stringValue);
+                int index = listPreference.findIndexOfValue(stringValue);
 
-            preference.setSummary(index >= 0
-                ? listPreference.getEntries()[index] : null);
+                CharSequence[] entries = listPreference.getEntries();
+                preference.setSummary(index >= 0 && entries != null && index < entries.length
+                    ? entries[index].toString().replace("%", "%%") : null);
 
-        }
+            }
         else if(preference instanceof RingtonePreference) {
 
             if(TextUtils.isEmpty(stringValue)) {
@@ -294,9 +311,11 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
             if (preference.getKey().equals(Preferences.PREF_GENERAL_BEARWARE_CHECKED)) {
             }
         }
-        else {
-
-            preference.setSummary(stringValue);
+            else {
+                preference.setSummary(stringValue);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         return true;
     };
@@ -308,12 +327,66 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
 
         String value = "";
         try {
-            value = PreferenceManager.getDefaultSharedPreferences(
-                preference.getContext()).getString(preference.getKey(), "");
+            if (preference.getKey() != null) {
+                value = PreferenceManager.getDefaultSharedPreferences(
+                    preference.getContext()).getString(preference.getKey(), "");
+            }
         } catch (Exception e) {
             Log.e(TAG, "Failed to get string value for pref: " + preference.getKey());
         }
         sBindPreferenceSummaryToValueListener.onPreferenceChange(preference, value);
+    }
+
+
+    public static class DisplayPreferenceFragment extends PreferenceFragment {
+        @Override
+        public void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            try {
+                addPreferencesFromResource(R.xml.pref_display);
+
+                // Font scale is now a SeekBarPreference (int), handled by its own summary update
+                Preference fontScalePref = findPreference("pref_display_font_scale");
+                if (fontScalePref instanceof SeekBarPreference) {
+                     fontScalePref.setOnPreferenceChangeListener((preference, newValue) -> {
+                        if (newValue instanceof Integer) {
+                            preference.setSummary(SeekBarPreference.getSummaryFormat((Integer)newValue));
+                        }
+                        return true;
+                    });
+                    // Set initial summary
+                    int val = PreferenceManager.getDefaultSharedPreferences(getActivity())
+                            .getInt("pref_display_font_scale", 100);
+                    fontScalePref.setSummary(SeekBarPreference.getSummaryFormat(val));
+                }
+
+                bindPreferenceSummaryToValue(findPreference("pref_channel_sort"));
+
+                Preference languagePref = findPreference(Preferences.PREF_LANGUAGE);
+                if (languagePref != null) {
+                    bindPreferenceSummaryToValue(languagePref);
+                    languagePref.setOnPreferenceChangeListener((preference, newValue) -> {
+                        String language = (String) newValue;
+                        LocaleHelper.setLocale(getActivity(), language);
+                        
+                        // Restart app to apply changes
+                        Intent intent = getActivity().getPackageManager()
+                            .getLaunchIntentForPackage(getActivity().getPackageName());
+                        if(intent != null) {
+                            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                            startActivity(intent);
+                            getActivity().finish();
+                        } else {
+                            getActivity().recreate();
+                        }
+                        return true;
+                    });
+                }
+            } catch (Exception e) {
+                 Log.e(TAG, "Failed to load Display preferences", e);
+                 e.printStackTrace();
+            }
+        }
     }
 
     public static class GeneralPreferenceFragment extends PreferenceFragment {
@@ -340,30 +413,7 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
                 bindPreferenceSummaryToValue(genderPref);
             }
 
-            Preference languagePref = findPreference(Preferences.PREF_LANGUAGE);
-            if (languagePref != null) {
-                Log.d(TAG, "Language preference found");
-                bindPreferenceSummaryToValue(languagePref);
-                languagePref.setOnPreferenceChangeListener((preference, newValue) -> {
-                    String language = (String) newValue;
-                    Log.d(TAG, "Language preference changed to: " + language);
-                    LocaleHelper.setLocale(getActivity(), language);
-                    
-                    // Restart app to apply changes
-                    Intent intent = getActivity().getPackageManager()
-                        .getLaunchIntentForPackage(getActivity().getPackageName());
-                    if(intent != null) {
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                        startActivity(intent);
-                        getActivity().finish();
-                    } else {
-                        getActivity().recreate();
-                    }
-                    return true;
-                });
-            } else {
-                Log.e(TAG, "Language preference NOT found");
-            }
+
         }
 
         @Override
@@ -397,6 +447,43 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             addPreferencesFromResource(R.xml.pref_soundevents);
+
+            ListPreference soundPackPref = (ListPreference) findPreference("pref_sound_pack");
+            if (soundPackPref != null) {
+                populateSoundPacks(soundPackPref);
+                soundPackPref.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
+                    @Override
+                    public boolean onPreferenceChange(Preference preference, Object newValue) {
+                        preference.setSummary((String) newValue);
+                        return true;
+                    }
+                });
+                soundPackPref.setSummary(soundPackPref.getValue());
+            }
+        }
+
+        private void populateSoundPacks(ListPreference lp) {
+            List<String> entries = new ArrayList<>();
+            List<String> entryValues = new ArrayList<>();
+
+            // Default option
+            entries.add(getString(R.string.sound_pack_default));
+            entryValues.add("Default");
+
+            // Scan /sdcard/TeamTalk/Sounds
+            File soundsDir = new File(Environment.getExternalStorageDirectory(), "TeamTalk/Sounds");
+            if (soundsDir.exists() && soundsDir.isDirectory()) {
+                File[] dirs = soundsDir.listFiles(File::isDirectory);
+                if (dirs != null) {
+                    for (File dir : dirs) {
+                        entries.add(dir.getName());
+                        entryValues.add(dir.getName());
+                    }
+                }
+            }
+
+            lp.setEntries(entries.toArray(new String[0]));
+            lp.setEntryValues(entryValues.toArray(new String[0]));
         }
     }
 

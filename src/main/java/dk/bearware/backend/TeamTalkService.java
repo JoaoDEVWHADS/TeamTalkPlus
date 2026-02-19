@@ -305,7 +305,7 @@ public class TeamTalkService extends Service
 
         }, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
         mediaSession.setActive(true);
-        Log.d(TAG, "Created TeamTalk 5 service");
+        Log.d(TAG, "Created TeamTalkPlus service");
     }
 
     @Override
@@ -348,7 +348,7 @@ public class TeamTalkService extends Service
         super.onDestroy();
         mediaSession.release();
 
-        Log.d(TAG, "Destroyed TeamTalk 5 service");
+        Log.d(TAG, "Destroyed TeamTalkPlus service");
     }
 
     private String getNotificationText() {

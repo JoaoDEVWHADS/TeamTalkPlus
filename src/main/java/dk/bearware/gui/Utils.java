@@ -346,33 +346,33 @@ public class Utils {
 
             int result = Utils.transmitUsersToggled(updchan, oldValue, newValue, StreamType.STREAMTYPE_CHANNELMSG);
             if (result < 0 && prefs.getBoolean("transmit_channel_msg_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_channel_msg_transmit_off));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_channel_msg_transmit_off)));
             else if (result > 0 && prefs.getBoolean("transmit_channel_msg_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_channel_msg_transmit_on));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_channel_msg_transmit_on)));
 
             result = Utils.transmitUsersToggled(updchan, oldValue, newValue, StreamType.STREAMTYPE_VOICE);
             if (result < 0 && prefs.getBoolean("transmit_voice_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_voice_transmit_off));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_voice_transmit_off)));
             else if (result > 0 && prefs.getBoolean("transmit_voice_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_voice_transmit_on));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_voice_transmit_on)));
 
             result = Utils.transmitUsersToggled(updchan, oldValue, newValue, StreamType.STREAMTYPE_VIDEOCAPTURE);
             if (result < 0 && prefs.getBoolean("transmit_vid_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_vid_transmit_off));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_vid_transmit_off)));
             else if (result > 0 && prefs.getBoolean("transmit_vid_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_vid_transmit_on));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_vid_transmit_on)));
 
             result = Utils.transmitUsersToggled(updchan, oldValue, newValue, StreamType.STREAMTYPE_DESKTOP);
             if (result < 0 && prefs.getBoolean("transmit_desk_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_desk_transmit_off));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_desk_transmit_off)));
             else if (result > 0 && prefs.getBoolean("transmit_desk_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_desk_transmit_on));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_desk_transmit_on)));
 
             result = Utils.transmitUsersToggled(updchan, oldValue, newValue, StreamType.STREAMTYPE_MEDIAFILE);
             if (result < 0 && prefs.getBoolean("transmit_media_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_media_transmit_off));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_media_transmit_off)));
             else if (result > 0 && prefs.getBoolean("transmit_media_checkbox", false))
-                return Optional.of(name + " " + context.getResources().getString(R.string.text_tts_media_transmit_on));
+                return Optional.of(context.getString(R.string.tts_fmt_2, name, context.getResources().getString(R.string.text_tts_media_transmit_on)));
         }
         return Optional.empty();
     }
@@ -418,7 +418,7 @@ public class Utils {
     }
 
     public static String ttsGenerateSubscriptionText(Context context, @StringRes int id, User user, boolean isOn) {
-        return String.format("%s %s %s", getDisplayName(context, user),
+        return context.getString(R.string.tts_fmt_3, getDisplayName(context, user),
                 context.getResources().getString(id),
                 (isOn ? context.getResources().getString(R.string.text_tts_subscribe_on) :
                         context.getResources().getString(R.string.text_tts_subscribe_off)));

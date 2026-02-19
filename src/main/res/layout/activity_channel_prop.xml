@@ -151,6 +151,39 @@
 
 	</LinearLayout>
 
+    <CheckBox
+        android:id="@+id/chan_fixed_volume"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/channel_prop_title_fixed_volume" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal" >
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/channel_prop_title_gain_level" />
+
+        <SeekBar
+            android:id="@+id/chan_gain_level"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="32000" />
+        
+        <TextView
+            android:id="@+id/chan_gain_level_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0"
+            android:ems="3"
+            android:gravity="right" />
+
+    </LinearLayout>
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

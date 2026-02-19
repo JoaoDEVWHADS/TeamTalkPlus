@@ -70,7 +70,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NotificationCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
-import androidx.fragment.app.FragmentPagerAdapter;
+import androidx.fragment.app.FragmentStatePagerAdapter;
 import androidx.fragment.app.ListFragment;
 import androidx.viewpager.widget.ViewPager;
 
@@ -81,6 +81,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -220,7 +221,11 @@ extends AppCompatActivity
               SOUND_USERLOGGEDOFF = 17,
               SOUND_INTERCEPTON = 18,
               SOUND_INTERCEPTOFF = 19,
-              SOUND_CHANMSGSENT = 20;
+              SOUND_CHANMSGSENT = 20,
+              SOUND_MUTEALL = 21,
+              SOUND_UNMUTEALL = 22;
+    
+    private Map<Integer, String> soundFilenames = new HashMap<>();
 
     SparseIntArray sounds = new SparseIntArray();
 
@@ -251,6 +256,18 @@ extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        final Thread.UncaughtExceptionHandler defaultHandler = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
+            Log.e("bearware", "FATAL EXCEPTION IN MAIN ACTIVITY", e);
+            if (defaultHandler != null) {
+                defaultHandler.uncaughtException(thread, e);
+            }
+        });
+
+        // Keep screen on
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        initSoundFilenames(); // Initialize sound filenames map
         ctx = getApplicationContext();
         prefs = new PrefsHelper(ctx);
 
@@ -302,6 +319,7 @@ extends AppCompatActivity
         mTabLayout.setupWithViewPager(mViewPager);
         mViewPager.setCurrentItem(mSectionsPagerAdapter.getPositionForId(SectionsPagerAdapter.CHANNELS_PAGE));
 
+        initSoundFilenames();
         setupButtons();
         
         micInputButton = findViewById(R.id.mic_input_switch);
@@ -440,11 +458,13 @@ extends AppCompatActivity
                 startActivityForResult(intent, REQUEST_NEWCHANNEL);
             }
             break;
+            /*
             case R.id.action_settings : {
                 Intent intent = new Intent(MainActivity.this, PreferencesActivity.class);
                 startActivity(intent);
                 break;
             }
+            */
             case android.R.id.home : {
                 int currentPage = mSectionsPagerAdapter.getIdForPosition(mViewPager.getCurrentItem());
                 Channel parentChannel = ((currentPage == SectionsPagerAdapter.CHANNELS_PAGE)
@@ -526,13 +546,14 @@ extends AppCompatActivity
             }
             TextView volLevel = findViewById(R.id.vollevel_text);
             volLevel.setText(Utils.refVolumeToPercent(mastervol) + "%");
-            volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText()));
+            volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText().toString()));
         }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        initSoundFilenames(); // Ensure sound directory exists on resume
         registerReceiver(headsetReceiver, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
         boolean proximitySensor = prefs.get("proximity_sensor_checkbox", false);
         if (proximitySensor) {
@@ -547,54 +568,58 @@ extends AppCompatActivity
         audioIcons = new SoundPool(1, AudioManager.STREAM_MUSIC, 0);
 
         if (prefs.get("server_lost_audio_icon", true)) {
-            sounds.put(SOUND_SERVERLOST, audioIcons.load(ctx, R.raw.serverlost, 1));
+            sounds.put(SOUND_SERVERLOST, loadSound(SOUND_SERVERLOST, R.raw.serverlost));
         }
         if (prefs.get("rx_tx_audio_icon", true)) {
-            sounds.put(SOUND_VOICETXON, audioIcons.load(ctx, R.raw.on, 1));
-            sounds.put(SOUND_VOICETXOFF, audioIcons.load(ctx, R.raw.off, 1));
+            sounds.put(SOUND_VOICETXON, loadSound(SOUND_VOICETXON, R.raw.on));
+            sounds.put(SOUND_VOICETXOFF, loadSound(SOUND_VOICETXOFF, R.raw.off));
         }
         if (prefs.get("private_message_audio_icon", true)) {
-            sounds.put(SOUND_USERMSG, audioIcons.load(ctx, R.raw.user_message, 1));
+            sounds.put(SOUND_USERMSG, loadSound(SOUND_USERMSG, R.raw.user_message));
         }
         if (prefs.get("channel_message_audio_icon", true)) {
-            sounds.put(SOUND_CHANMSG, audioIcons.load(ctx, R.raw.channel_message, 1));
+            sounds.put(SOUND_CHANMSG, loadSound(SOUND_CHANMSG, R.raw.channel_message));
         }
         if (prefs.get("channel_message_sent_audio_icon", true)) {
-            sounds.put(SOUND_CHANMSGSENT, audioIcons.load(ctx, R.raw.channel_message_sent, 1));
+            sounds.put(SOUND_CHANMSGSENT, loadSound(SOUND_CHANMSGSENT, R.raw.channel_message_sent));
         }
         if (prefs.get("broadcast_message_audio_icon", true)) {
-            sounds.put(SOUND_BCASTMSG, audioIcons.load(ctx, R.raw.broadcast_message, 1));
+            sounds.put(SOUND_BCASTMSG, loadSound(SOUND_BCASTMSG, R.raw.broadcast_message));
         }
         if (prefs.get("files_updated_audio_icon", true)) {
-            sounds.put(SOUND_FILESUPDATE, audioIcons.load(ctx, R.raw.fileupdate, 1));
+            sounds.put(SOUND_FILESUPDATE, loadSound(SOUND_FILESUPDATE, R.raw.fileupdate));
         }
         if (prefs.get("voiceact_audio_icon", true)) {
-            sounds.put(SOUND_VOXENABLE, audioIcons.load(ctx, R.raw.voiceact_enable, 1));
-            sounds.put(SOUND_VOXDISABLE, audioIcons.load(ctx, R.raw.voiceact_disable, 1));
+            sounds.put(SOUND_VOXENABLE, loadSound(SOUND_VOXENABLE, R.raw.voiceact_enable));
+            sounds.put(SOUND_VOXDISABLE, loadSound(SOUND_VOXDISABLE, R.raw.voiceact_disable));
         }
         if (prefs.get("voiceact_triggered_icon", true)) {
-            sounds.put(SOUND_VOXON, audioIcons.load(ctx, R.raw.voiceact_on, 1));
-            sounds.put(SOUND_VOXOFF, audioIcons.load(ctx, R.raw.voiceact_off, 1));
+            sounds.put(SOUND_VOXON, loadSound(SOUND_VOXON, R.raw.voiceact_on));
+            sounds.put(SOUND_VOXOFF, loadSound(SOUND_VOXOFF, R.raw.voiceact_off));
         }
         if (prefs.get("intercept_audio_icon", true)) {
-            sounds.put(SOUND_INTERCEPTON, audioIcons.load(ctx, R.raw.intercept, 1));
-            sounds.put(SOUND_INTERCEPTOFF, audioIcons.load(ctx, R.raw.interceptend, 1));
+            sounds.put(SOUND_INTERCEPTON, loadSound(SOUND_INTERCEPTON, R.raw.intercept));
+            sounds.put(SOUND_INTERCEPTOFF, loadSound(SOUND_INTERCEPTOFF, R.raw.interceptend));
         }
         if (prefs.get("transmitready_icon", true)) {
-            sounds.put(SOUND_TXREADY, audioIcons.load(ctx, R.raw.txqueue_start, 1));
-            sounds.put(SOUND_TXSTOP, audioIcons.load(ctx, R.raw.txqueue_stop, 1));
+            sounds.put(SOUND_TXREADY, loadSound(SOUND_TXREADY, R.raw.txqueue_start));
+            sounds.put(SOUND_TXSTOP, loadSound(SOUND_TXSTOP, R.raw.txqueue_stop));
         }
         if (prefs.get("userjoin_icon", true)) {
-            sounds.put(SOUND_USERJOIN, audioIcons.load(ctx, R.raw.user_join, 1));
+            sounds.put(SOUND_USERJOIN, loadSound(SOUND_USERJOIN, R.raw.user_join));
         }
         if (prefs.get("userleft_icon", true)) {
-            sounds.put(SOUND_USERLEFT, audioIcons.load(ctx, R.raw.user_left, 1));
+            sounds.put(SOUND_USERLEFT, loadSound(SOUND_USERLEFT, R.raw.user_left));
         }
         if (prefs.get("userloggedin_icon", true)) {
-            sounds.put(SOUND_USERLOGGEDIN, audioIcons.load(ctx, R.raw.logged_on, 1));
+            sounds.put(SOUND_USERLOGGEDIN, loadSound(SOUND_USERLOGGEDIN, R.raw.logged_on));
         }
         if (prefs.get("userloggedoff_icon", true)) {
-            sounds.put(SOUND_USERLOGGEDOFF, audioIcons.load(ctx, R.raw.logged_off, 1));
+            sounds.put(SOUND_USERLOGGEDOFF, loadSound(SOUND_USERLOGGEDOFF, R.raw.logged_off));
+        }
+        if (prefs.get("mute_all_audio_icon", true)) {
+            sounds.put(SOUND_MUTEALL, loadSound(SOUND_MUTEALL, R.raw.mute_all));
+            sounds.put(SOUND_UNMUTEALL, loadSound(SOUND_UNMUTEALL, R.raw.unmute_all));
         }
 
         getTextMessagesAdapter().showLogMessages(prefs.get("show_log_messages", true));
@@ -605,6 +630,8 @@ extends AppCompatActivity
         ttsWrapper.setAccessibilityStream(prefs.get("pref_a11y_volume", false));
         ttsWrapper.switchEngine(prefs.get("pref_speech_engine", TTSWrapper.defaultEngineName));
     }
+
+
 
     @Override
     protected void onPause() {
@@ -806,7 +833,7 @@ extends AppCompatActivity
             if (inputType == MIC_INPUT_INTERNAL) {
                 audioManager.setSpeakerphoneOn(true);
             } else if (inputType == MIC_INPUT_EXTERNAL) {
-                audioManager.setSpeakerphoneOn(false); 
+                audioManager.setSpeakerphoneOn(false);
             } else {
                 audioManager.setSpeakerphoneOn(false); // Default usually means headset if plugged in
             }
@@ -822,7 +849,7 @@ extends AppCompatActivity
     PrivateSectionFragment privateChatFragment;
     SettingsSectionFragment settingsFragment;
 
-    public class SectionsPagerAdapter extends FragmentPagerAdapter implements ViewPager.OnPageChangeListener {
+    public class SectionsPagerAdapter extends FragmentStatePagerAdapter implements ViewPager.OnPageChangeListener {
 
         public static final int FILES_PAGE          = 0,
                                 CHANNELS_PAGE       = 1,
@@ -836,6 +863,9 @@ extends AppCompatActivity
                                 CONNECTION_PAGE     = 9,
                                 ONLINE_USERS_PAGE   = 10,
                                 MANAGEMENT_STATUS_PAGE = 11,
+                                
+                                MORE_PAGE           = 100,
+                                LESS_PAGE           = 101,
 
                                 PAGE_COUNT          = 12;
 
@@ -845,34 +875,76 @@ extends AppCompatActivity
             PageItem(String t, int i) { title = t; id = i; }
         }
 
+        public static class DummyFragment extends Fragment {
+            @Override
+            public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+                return new View(container.getContext());
+            }
+        }
+
+        private final ArrayList<PageItem> allPages = new ArrayList<>();
         private final ArrayList<Integer> pageOrder = new ArrayList<>();
+        private boolean isExpanded = false;
 
         public SectionsPagerAdapter(FragmentManager fm) {
             super(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT);
-            
-            List<PageItem> pages = new ArrayList<>();
+
             Locale l = Locale.getDefault();
-            
-            pages.add(new PageItem(getString(R.string.title_section_files).toUpperCase(l), FILES_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_channels).toUpperCase(l), CHANNELS_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_media).toUpperCase(l), MEDIA_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_management).toUpperCase(l), MANAGEMENT_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_chat).toUpperCase(l), GLOBAL_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_event_history).toUpperCase(l), EVENT_HISTORY_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_channel_chat).toUpperCase(l), CHAT_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_settings).toUpperCase(l), SETTINGS_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_private).toUpperCase(l), PRIVATE_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_connection).toUpperCase(l), CONNECTION_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_online_users).toUpperCase(l), ONLINE_USERS_PAGE));
-            pages.add(new PageItem(getString(R.string.title_section_status).toUpperCase(l), MANAGEMENT_STATUS_PAGE));
-            
-            Collections.sort(pages, (p1, p2) -> p1.title.compareTo(p2.title));
-            
-            for(PageItem p : pages) {
+
+            allPages.add(new PageItem(getString(R.string.title_section_files).toUpperCase(l), FILES_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_channels).toUpperCase(l), CHANNELS_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_media).toUpperCase(l), MEDIA_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_management).toUpperCase(l), MANAGEMENT_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_chat).toUpperCase(l), GLOBAL_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_event_history).toUpperCase(l), EVENT_HISTORY_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_channel_chat).toUpperCase(l), CHAT_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_settings).toUpperCase(l), SETTINGS_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_private).toUpperCase(l), PRIVATE_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_connection).toUpperCase(l), CONNECTION_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_online_users).toUpperCase(l), ONLINE_USERS_PAGE));
+            allPages.add(new PageItem(getString(R.string.title_section_status).toUpperCase(l), MANAGEMENT_STATUS_PAGE));
+
+            updateTabs(false);
+        }
+
+        public void updateTabs(boolean expanded) {
+            this.isExpanded = expanded;
+            pageOrder.clear();
+
+            List<PageItem> primaryPages = new ArrayList<>();
+            List<PageItem> secondaryPages = new ArrayList<>();
+
+            for (PageItem p : allPages) {
+                if (p.id == FILES_PAGE || p.id == CHANNELS_PAGE || p.id == GLOBAL_PAGE || p.id == EVENT_HISTORY_PAGE) {
+                    primaryPages.add(p);
+                } else {
+                    secondaryPages.add(p);
+                }
+            }
+
+            Collections.sort(primaryPages, (p1, p2) -> p1.title.compareTo(p2.title));
+            Collections.sort(secondaryPages, (p1, p2) -> p1.title.compareTo(p2.title));
+
+            for (PageItem p : primaryPages) {
                 pageOrder.add(p.id);
             }
+
+            if (expanded) {
+                pageOrder.add(LESS_PAGE);
+                for (PageItem p : secondaryPages) {
+                    pageOrder.add(p.id);
+                }
+            } else {
+                pageOrder.add(MORE_PAGE);
+            }
+            notifyDataSetChanged();
         }
-        
+
+        @Override
+        public int getItemPosition(@NonNull Object object) {
+            return POSITION_NONE;
+        }
+
         public int getPositionForId(int id) {
             return pageOrder.indexOf(id);
         }
@@ -913,6 +985,9 @@ extends AppCompatActivity
                     return new ConnectionStatusSectionFragment();
                 case MANAGEMENT_STATUS_PAGE :
                     return new ManageStatusFragment();
+                case MORE_PAGE:
+                case LESS_PAGE:
+                    return new DummyFragment(); // Dummy fragment
             }
         }
 
@@ -925,31 +1000,12 @@ extends AppCompatActivity
         public CharSequence getPageTitle(int position) {
             int id = getIdForPosition(position);
             Locale l = Locale.getDefault();
-            switch(id) {
-                case CHANNELS_PAGE :
-                    return getString(R.string.title_section_channels).toUpperCase(l);
-                case CHAT_PAGE :
-                    return getString(R.string.title_section_channel_chat).toUpperCase(l);
-                case GLOBAL_PAGE :
-                    return getString(R.string.title_section_chat).toUpperCase(l);
-                case EVENT_HISTORY_PAGE :
-                    return getString(R.string.title_section_event_history).toUpperCase(l);
-                case PRIVATE_PAGE :
-                    return getString(R.string.title_section_private).toUpperCase(l);
-                case MEDIA_PAGE :
-                    return getString(R.string.title_section_media).toUpperCase(l);
-                case FILES_PAGE :
-                    return getString(R.string.title_section_files).toUpperCase(l);
-                case ONLINE_USERS_PAGE :
-                    return getString(R.string.title_section_online_users).toUpperCase(l);
-                case MANAGEMENT_PAGE :
-                    return getString(R.string.title_section_management).toUpperCase(l);
-                case SETTINGS_PAGE:
-                    return getString(R.string.title_section_settings).toUpperCase(l);
-                case CONNECTION_PAGE:
-                    return getString(R.string.title_section_connection).toUpperCase(l);
-                case MANAGEMENT_STATUS_PAGE:
-                    return getString(R.string.title_section_status).toUpperCase(l);
+            
+            if (id == MORE_PAGE) return getString(R.string.tab_more).toUpperCase(l);
+            if (id == LESS_PAGE) return getString(R.string.tab_less).toUpperCase(l);
+
+            for (PageItem p : allPages) {
+                if (p.id == id) return p.title;
             }
             return null;
         }
@@ -962,15 +1018,33 @@ extends AppCompatActivity
         @Override
         public void onPageSelected(int position) {
             int id = getIdForPosition(position);
-            
+
+            if (id == MORE_PAGE) {
+                mViewPager.post(() -> {
+                    updateTabs(true);
+                    // Select the first secondary tab (index 5: 0-3 primary, 4 Less, 5 First Secondary)
+                    if (pageOrder.size() > 5) {
+                        mViewPager.setCurrentItem(5, false); // No smooth scroll to avoid weirdness
+                    }
+                });
+                return;
+            } else if (id == LESS_PAGE) {
+                mViewPager.post(() -> {
+                    updateTabs(false);
+                    // Select the last primary tab (index 3)
+                    mViewPager.setCurrentItem(3, false);
+                });
+                return;
+            }
+
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             View v = getCurrentFocus();
             if (v != null)
                 imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
-            
+
             accessibilityAssistant.setVisiblePage(id);
             invalidateOptionsMenu();
-            
+
             if (id == SETTINGS_PAGE) {
                 mTabLayout.setVisibility(View.GONE);
             } else {
@@ -1371,8 +1445,8 @@ private EditText newmsg;
 
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-            
-            
+
+
             View rootView = inflater.inflate(R.layout.fragment_main_global, container, false);
             mainActivity.accessibilityAssistant.registerPage(rootView, SectionsPagerAdapter.EVENT_HISTORY_PAGE);
 
@@ -1381,10 +1455,10 @@ private EditText newmsg;
             if (emptyView != null) {
                 msgList.setEmptyView(emptyView);
             }
-            
+
             msgList.setAdapter(mainActivity.eventHistoryAdapter);
 
-            
+
             View editMsg = rootView.findViewById(R.id.global_msg_edittext);
             View sendBtn = rootView.findViewById(R.id.global_msg_sendbtn);
             if(editMsg != null) editMsg.setVisibility(View.GONE);
@@ -1567,6 +1641,7 @@ private EditText newmsg;
 
         private static final int[] TITLES = {
             R.string.pref_header_general,
+            R.string.pref_header_display,
             R.string.pref_title_audio_icons,
             R.string.pref_header_tts,
             R.string.pref_header_serverlist,
@@ -1577,6 +1652,7 @@ private EditText newmsg;
 
         private static final String[] FRAGMENTS = {
             dk.bearware.gui.PreferencesActivity.GeneralPreferenceFragment.class.getName(),
+            dk.bearware.gui.PreferencesActivity.DisplayPreferenceFragment.class.getName(),
             dk.bearware.gui.PreferencesActivity.SoundEventsPreferenceFragment.class.getName(),
             dk.bearware.gui.PreferencesActivity.TtsPreferenceFragment.class.getName(),
             dk.bearware.gui.PreferencesActivity.ServerListPreferenceFragment.class.getName(),
@@ -1769,7 +1845,29 @@ private EditText newmsg;
                     subchannels.add(root);
             }
 
-            Collections.sort(subchannels, (c1, c2) -> c1.szName.compareToIgnoreCase(c2.szName));
+            String sortOrder = prefs.get("pref_channel_sort", "0");
+            Comparator<Channel> comparator;
+
+            if ("2".equals(sortOrder)) { // Popularity
+                 comparator = (c1, c2) -> {
+                     int count1 = 0;
+                     int count2 = 0;
+                     for (User u : MainActivity.this.users.values()) {
+                         if (u.nChannelID == c1.nChannelID) count1++;
+                         if (u.nChannelID == c2.nChannelID) count2++;
+                     }
+                     if (count1 != count2) {
+                         return count2 - count1; // Descending
+                     }
+                     return c1.szName.compareToIgnoreCase(c2.szName); // Secondary sort A-Z
+                 };
+            } else if ("1".equals(sortOrder)) { // Z-A
+                 comparator = (c1, c2) -> c2.szName.compareToIgnoreCase(c1.szName);
+            } else { // Default A-Z
+                 comparator = (c1, c2) -> c1.szName.compareToIgnoreCase(c2.szName);
+            }
+
+            Collections.sort(subchannels, comparator);
 
             Collections.sort(stickychannels, (c1, c2) -> c1.szName.compareToIgnoreCase(c2.szName));
 
@@ -1795,7 +1893,7 @@ private EditText newmsg;
         public int getCount() {
             int count = currentusers.size() + subchannels.size() + stickychannels.size();
             if (curchannel != null) {
-                count++; 
+                count++;
             }
             return count;
         }
@@ -1827,7 +1925,7 @@ private EditText newmsg;
                     }
                 }
 
-                position--; 
+                position--;
             }
             return subchannels.get(position);
         }
@@ -1855,7 +1953,7 @@ private EditText newmsg;
                     return PARENT_CHANNEL_VIEW_TYPE;
                 }
 
-                position--; 
+                position--;
             }
 
             return CHANNEL_VIEW_TYPE;
@@ -1977,7 +2075,7 @@ private EditText newmsg;
                 String speaking = talking ? getString(R.string.user_state_now_speaking, name) : name;
                 String genderText = female ? getString(R.string.gender_female) : neutral ? getString(R.string.gender_neutral) : getString(R.string.gender_male);
                 String op = isOperator ? getString(R.string.user_state_operator) : "";
-                nickname.setContentDescription(move + speaking + " " + genderText + " " + op);
+                nickname.setContentDescription(getString(R.string.user_accessibility_desc, move, speaking, genderText, op));
 
                 if (talking) {
                     if (female) {
@@ -1985,7 +2083,7 @@ private EditText newmsg;
                     } else if (neutral) {
                         icon_resource = R.drawable.neutral_green;
                     } else {
-                        icon_resource = R.drawable.man_green; 
+                        icon_resource = R.drawable.man_green;
                     }
                 } else {
                     if (female) {
@@ -1993,11 +2091,11 @@ private EditText newmsg;
                     } else if (neutral) {
                         icon_resource = away ? R.drawable.neutral_orange : R.drawable.neutral_blue;
                     } else {
-                        icon_resource = away ? R.drawable.man_orange : R.drawable.man_blue; 
+                        icon_resource = away ? R.drawable.man_orange : R.drawable.man_blue;
                     }
                 }
 
-                status.setContentDescription(away ? getString(R.string.user_state_away) + " " + user.szStatusMsg : null);
+                status.setContentDescription(away ? getString(R.string.user_status_fmt, getString(R.string.user_state_away), user.szStatusMsg) : null);
 
                 usericon.setImageResource(icon_resource);
                 usericon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -2017,7 +2115,7 @@ private EditText newmsg;
 
     @Override
     public void onItemClick(AdapterView< ? > l, View v, int position, long id) {
-        
+
         if (channelsAdapter.getItemViewType(position) == ChannelListAdapter.PARENT_CHANNEL_VIEW_TYPE) {
             // Check if we are at Root (Initial Channel)
             if (curchannel != null && curchannel.nParentID == 0) {
@@ -2034,7 +2132,26 @@ private EditText newmsg;
                                    REQUEST_EDITUSER);
         }
         else if(item instanceof Channel channel) {
-            setCurrentChannel((channel.nChannelID > 0) ? channel : null);
+
+            // Check if it's the ".." (Parent) item
+            if (channelsAdapter.getItemViewType(position) == ChannelListAdapter.PARENT_CHANNEL_VIEW_TYPE) {
+                // Determine parent channel to view
+                if (curchannel != null && curchannel.nParentID > 0) {
+                     Channel parentChan = getService().getChannels().get(curchannel.nParentID);
+                     setCurrentChannel(parentChan);
+                } else {
+                     setCurrentChannel(null); // Go to Root
+                }
+            }
+            else {
+                // Normal channel click -> View/Expand ONLY (Never Join automatically)
+                if(channel.nChannelID > 0) {
+                    setCurrentChannel(channel);
+                }
+                else {
+                    setCurrentChannel(null);
+                }
+            }
             channelsAdapter.notifyDataSetChanged();
         }
     }
@@ -2046,11 +2163,17 @@ private EditText newmsg;
     @Override
     public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
 
+        // Disable long-click context menu for ".." (Parent) item
+        // This ensures it is strictly for navigation ("só voltar")
+        if (channelsAdapter.getItemViewType(position) == ChannelListAdapter.PARENT_CHANNEL_VIEW_TYPE) {
+            return true;
+        }
+
         Object item = parent.getItemAtPosition(position);
 
         if (item instanceof User) {
             final User user = (User) item;
-            selectedUser = user; 
+            selectedUser = user;
 
             androidx.appcompat.widget.PopupMenu popup = new androidx.appcompat.widget.PopupMenu(this, view);
 
@@ -2109,26 +2232,26 @@ private EditText newmsg;
             }
 
             if (kickRight || operatorRight) {
-                 popup.getMenu().add("Expulsar do canal").setOnMenuItemClickListener(menuItem -> {
+                popup.getMenu().add(R.string.action_kickchan).setOnMenuItemClickListener(menuItem -> {
                     getClient().doKickUser(user.nUserID, user.nChannelID);
                     return true;
                 });
             }
             if (banRight || operatorRight) {
-                 popup.getMenu().add("Banir do canal").setOnMenuItemClickListener(menuItem -> {
+                popup.getMenu().add(R.string.action_banchan).setOnMenuItemClickListener(menuItem -> {
                     getClient().doBanUser(user.nUserID, user.nChannelID);
                     return true;
                 });
             }
 
             if (kickRight) {
-                popup.getMenu().add("Expulsar do servidor").setOnMenuItemClickListener(menuItem -> {
+                popup.getMenu().add(R.string.action_kicksrv).setOnMenuItemClickListener(menuItem -> {
                     getClient().doKickUser(user.nUserID, 0);
                     return true;
                 });
             }
             if (banRight) {
-                popup.getMenu().add("Banir do servidor").setOnMenuItemClickListener(menuItem -> {
+                popup.getMenu().add(R.string.action_bansrv).setOnMenuItemClickListener(menuItem -> {
                     getClient().doBanUser(user.nUserID, 0);
                     return true;
                 });
@@ -2302,6 +2425,9 @@ private EditText newmsg;
             alert.show();
             break;
         }
+        case R.id.action_settings:
+            startActivity(new Intent(this, PreferencesActivity.class));
+            return true;
 
         default:
             return false;
@@ -2321,11 +2447,18 @@ private EditText newmsg;
     }
 
     private void adjustMuteButton(ImageButton btn) {
-        if (getService().getCurrentMuteState()) {
+        // Use service state if available, otherwise check volume
+        boolean isMuted = false;
+        if (getService() != null) {
+            isMuted = getService().isMute();
+        } else {
+            isMuted = (getClient().getSoundOutputVolume() == 0);
+        }
+
+        if (isMuted) {
             btn.setImageResource(R.drawable.mute_blue);
             btn.setContentDescription(getString(R.string.speaker_unmute));
-        }
-        else {
+        } else {
             btn.setImageResource(R.drawable.speaker_blue);
             btn.setContentDescription(getString(R.string.speaker_mute));
         }
@@ -2337,7 +2470,7 @@ private EditText newmsg;
 
         if (voiceActivationEnabled) {
             micLevel.setText(level + "%");
-            micLevel.setContentDescription(getString(R.string.vox_level_description, micLevel.getText()));
+            micLevel.setContentDescription(getString(R.string.vox_level_description, micLevel.getText().toString()));
             voxSwitch.setImageResource(R.drawable.microphone);
             voxSwitch.setContentDescription(getString(R.string.voice_activation_off));
             ((SeekBar) findViewById(R.id.mic_gainSeekBar)).setProgress(getClient().getVoiceActivationLevel());
@@ -2345,7 +2478,7 @@ private EditText newmsg;
         }
         else {
             micLevel.setText(Utils.refVolumeToPercent(level) + "%");
-            micLevel.setContentDescription(getString(R.string.mic_gain_description, micLevel.getText()));
+            micLevel.setContentDescription(getString(R.string.mic_gain_description, micLevel.getText().toString()));
             voxSwitch.setImageResource(R.drawable.mic_green);
             voxSwitch.setContentDescription(getString(R.string.voice_activation_on));
             ((SeekBar) findViewById(R.id.mic_gainSeekBar)).setProgress(Utils.refVolumeToPercent(getClient().getSoundInputGainLevel()));
@@ -2448,20 +2581,20 @@ private EditText newmsg;
                     getClient().setSoundOutputVolume(outputVolume);
                     prefs.put(Preferences.PREF_SOUNDSYSTEM_MASTERVOLUME, outputVolume);
                     volLevel.setText(progress + "%");
-                    volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText()));
+                    volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText().toString()));
             }     else if (seekBar == micSeekBar) {
                     if (getService().isVoiceActivationEnabled()) {
                         int voxLevel = progress;
                         getClient().setVoiceActivationLevel(voxLevel);
                         prefs.put(Preferences.PREF_SOUNDSYSTEM_VOICEACTIVATION_LEVEL, voxLevel);
                         micLevel.setText(progress + "%");
-                        micLevel.setContentDescription(getString(R.string.vox_level_description, micLevel.getText()));
+                        micLevel.setContentDescription(getString(R.string.vox_level_description, micLevel.getText().toString()));
                     } else {
                         int inputGain = Utils.refGain(progress);
                         getClient().setSoundInputGainLevel(inputGain);
                         prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, inputGain);
                         micLevel.setText(progress + "%");
-                        micLevel.setContentDescription(getString(R.string.mic_gain_description, micLevel.getText()));
+                        micLevel.setContentDescription(getString(R.string.mic_gain_description, micLevel.getText().toString()));
                     }
                 }
         }
@@ -2486,13 +2619,38 @@ private EditText newmsg;
         speakerBtn.setOnClickListener(v -> {
             if ((mConnection != null) && mConnection.isBound()) {
                 getService().setMute(!getService().isMute());
+                if (getService().isMute()) {
+                    Log.d(TAG, "Mute enabled");
+                    // Play mute sound if enabled
+                    if (prefs.get("mute_all_audio_icon", true)) {
+                        Integer soundId = sounds.get(SOUND_MUTEALL);
+                        Log.d(TAG, "Playing mute sound. SoundID: " + soundId);
+                        if (soundId != null && soundId != 0) {
+                            audioIcons.play(soundId, 1.0f, 1.0f, 0, 0, 1.0f);
+                        } else {
+                            Log.w(TAG, "Mute sound not found or not loaded");
+                        }
+                    }
+                } else {
+                    Log.d(TAG, "Mute disabled");
+                    // Play unmute sound if enabled
+                     if (prefs.get("mute_all_audio_icon", true)) {
+                        Integer soundId = sounds.get(SOUND_UNMUTEALL);
+                        Log.d(TAG, "Playing unmute sound. SoundID: " + soundId);
+                        if (soundId != null && soundId != 0) {
+                            audioIcons.play(soundId, 1.0f, 1.0f, 0, 0, 1.0f);
+                        } else {
+                            Log.w(TAG, "Unmute sound not found or not loaded");
+                        }
+                    }
+                }
                 adjustMuteButton((ImageButton) v);
 
                 int level = getService().isMute() ?
                     0 :
                     Utils.refVolumeToPercent(getClient().getSoundOutputVolume());
                 volLevel.setText(level + "%");
-                volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText()));
+                volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText().toString()));
             }
         });
 
@@ -2625,7 +2783,7 @@ private EditText newmsg;
         }
         TextView volLevel = findViewById(R.id.vollevel_text);
         volLevel.setText(Utils.refVolumeToPercent(mastervol) + "%");
-        volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText()));
+        volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText().toString()));
     }
 
     private void closeTeamTalkService(TeamTalkService service) {
@@ -2750,7 +2908,7 @@ private EditText newmsg;
             audioIcons.play(sounds.get(SOUND_USERLOGGEDIN), 1.0f, 1.0f, 0, 0, 1.0f);
         if (ttsWrapper != null && prefs.get("server_login_checkbox", true)) {
             String name = Utils.getDisplayName(getBaseContext(), user);
-            ttsWrapper.speak(name + " " + getResources().getString(R.string.text_tts_loggedin));
+            ttsWrapper.speak(getString(R.string.tts_fmt_2, name, getString(R.string.text_tts_loggedin)));
         }
 
         if (onlineUsersAdapter != null) {
@@ -2772,7 +2930,7 @@ private EditText newmsg;
             audioIcons.play(sounds.get(SOUND_USERLOGGEDOFF), 1.0f, 1.0f, 0, 0, 1.0f);
         if (ttsWrapper != null && prefs.get("server_logout_checkbox", true)) {
             String name = Utils.getDisplayName(getBaseContext(), user);
-            ttsWrapper.speak(name + " " + getResources().getString(R.string.text_tts_loggedout));
+            ttsWrapper.speak(getString(R.string.tts_fmt_2, name, getString(R.string.text_tts_loggedout)));
         }
 
         // Duplicate log removed - logging is handled by TeamTalkService
@@ -2814,7 +2972,7 @@ private EditText newmsg;
             accessibilityAssistant.unlockEvents();
         }
 
-        Integer prevChanId = prevChannels.remove(user.nUserID);
+        Integer prevChanId = prevChannels.get(user.nUserID);
         
         // Update user state
         users.put(user.nUserID, user);
@@ -2834,7 +2992,7 @@ private EditText newmsg;
             
             if (isToMyChannel) {
                  // Joined MY channel - "Fulano entered the channel"
-                ttsWrapper.speak(name + " " + getString(R.string.text_tts_joined_chan));
+                ttsWrapper.speak(getString(R.string.tts_fmt_2, name, getString(R.string.text_tts_joined_chan)));
             } else {
                 // Joined ANOTHER channel - "Fulano entered the channel [Channel Name]"
                 ttsWrapper.speak(joinLogMsg);
@@ -2894,7 +3052,8 @@ private EditText newmsg;
 
             // No TTS when I leave the channel
 
-            setCurrentChannel(null);
+            // Do not reset current channel view to allow navigation
+            // setCurrentChannel(null);
             setMyChannel(null);
         }
         else if(curchannel != null && channelid == curchannel.nChannelID){
@@ -2917,7 +3076,7 @@ private EditText newmsg;
                 if (ttsWrapper != null && prefs.get("channel_leave_checkbox", true)) {
                     // Remote user left MY channel: "Name has left the channel"
                     String name = Utils.getDisplayName(getBaseContext(), user);
-                    ttsWrapper.speak(name + " " + getString(R.string.text_tts_left_chan));
+                    ttsWrapper.speak(getString(R.string.tts_fmt_2, name, getString(R.string.text_tts_left_chan)));
                 }
             }
             accessibilityAssistant.unlockEvents();
@@ -2930,7 +3089,7 @@ private EditText newmsg;
             if (ttsWrapper != null && prefs.get("channel_leave_checkbox", true)) {
                  // Remote user left ANOTHER channel: "Name has left the channel X"
                  String name = Utils.getDisplayName(getBaseContext(), user);
-                 ttsWrapper.speak(name + " " + getString(R.string.text_tts_left_chan) + " " + chanName);
+                 ttsWrapper.speak(getString(R.string.tts_fmt_3, name, getString(R.string.text_tts_left_chan), chanName));
             }
         }
 
@@ -3157,6 +3316,74 @@ private EditText newmsg;
         int sound = sounds.get(bVoiceActive ? SOUND_VOXON : SOUND_VOXOFF);
         if (sound != 0)
             audioIcons.play(sound, 1.0f, 1.0f, 0, 0, 1.0f);
+    }
+
+    private void initSoundFilenames() {
+        Log.d(TAG, "initSoundFilenames() called");
+        File soundDir = new File("/sdcard/TeamTalk/Sounds");
+        if (!soundDir.exists()) {
+             if (soundDir.mkdirs()) {
+                 Log.d(TAG, "Created sound directory: " + soundDir.getAbsolutePath());
+             } else {
+                 Log.e(TAG, "Failed to create sound directory: " + soundDir.getAbsolutePath());
+             }
+        }
+
+        soundFilenames.put(SOUND_USERLOGGEDIN, "logged_on.wav");
+        soundFilenames.put(SOUND_USERLOGGEDOFF, "logged_off.wav");
+        soundFilenames.put(SOUND_MUTEALL, "mute_all.wav");
+        soundFilenames.put(SOUND_UNMUTEALL, "unmute_all.wav");
+        soundFilenames.put(SOUND_USERMSG, "new_textmsg.wav");
+        soundFilenames.put(SOUND_CHANMSGSENT, "chan_msg_sent.wav");
+        soundFilenames.put(SOUND_SERVERLOST, "server_lost.wav");
+        soundFilenames.put(SOUND_VOICETXON, "voice_tx_on.wav");
+        soundFilenames.put(SOUND_VOICETXOFF, "voice_tx_off.wav");
+        soundFilenames.put(SOUND_USERJOIN, "joined_chan.wav");
+        soundFilenames.put(SOUND_USERLEFT, "user_left.wav");
+        soundFilenames.put(SOUND_CHANMSG, "channel_message.wav");
+        soundFilenames.put(SOUND_BCASTMSG, "broadcast_message.wav");
+        soundFilenames.put(SOUND_FILESUPDATE, "fileupdate.wav");
+        soundFilenames.put(SOUND_VOXENABLE, "voiceact_enable.wav");
+        soundFilenames.put(SOUND_VOXDISABLE, "voiceact_disable.wav");
+        soundFilenames.put(SOUND_VOXON, "voiceact_on.wav");
+        soundFilenames.put(SOUND_VOXOFF, "voiceact_off.wav");
+        soundFilenames.put(SOUND_TXREADY, "txqueue_start.wav");
+        soundFilenames.put(SOUND_TXSTOP, "txqueue_stop.wav");
+        soundFilenames.put(SOUND_INTERCEPTON, "intercept.wav");
+        soundFilenames.put(SOUND_INTERCEPTOFF, "interceptend.wav");
+    }
+
+    private int loadSound(int soundEvent, int defaultResId) {
+        String packName = prefs.get("pref_sound_pack", "Default");
+        Log.d(TAG, "loadSound event: " + soundEvent + " pack: " + packName);
+        if ("Default".equals(packName)) {
+            if (defaultResId == 0) return 0;
+            return audioIcons.load(this, defaultResId, 1);
+        }
+
+        String filename = soundFilenames.get(soundEvent);
+        if (filename == null) {
+            Log.w(TAG, "No filename for event: " + soundEvent + ". Silent (no fallback).");
+            return 0;
+        }
+
+        // Remove .wav extension if present to get the base name
+        String basename = filename;
+        if (filename.endsWith(".wav")) {
+            basename = filename.substring(0, filename.length() - 4);
+        }
+
+        String[] extensions = {".wav", ".ogg", ".mp3"};
+        for (String ext : extensions) {
+            File soundFile = new File("/sdcard/TeamTalk/Sounds/" + packName + "/" + basename + ext);
+            if (soundFile.exists()) {
+                Log.d(TAG, "Loading sound file: " + soundFile.getAbsolutePath());
+                return audioIcons.load(soundFile.getAbsolutePath(), 1);
+            }
+        }
+        
+        Log.w(TAG, "Sound file not found for event " + soundEvent + " in pack " + packName + ". Silent (no fallback).");
+        return 0;
     }
 
     class PrivateConversationsAdapter extends BaseAdapter {

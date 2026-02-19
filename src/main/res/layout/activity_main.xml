@@ -33,7 +33,7 @@
 	        android:layout_centerHorizontal="true"
 	        android:layout_centerVertical="true"
 	        android:columnCount="1"
-	        android:rowCount="6" >
+	        android:rowCount="7" >
 
 	        <TextView
 	            android:id="@+id/vollevel_text"
@@ -48,9 +48,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_column="0"
-			android:layout_row="1"
+            android:layout_row="1"
             android:layout_gravity="center_horizontal"
             android:contentDescription="@string/mastervolume"
+            android:saveEnabled="false"
             android:gravity="center" />
 
 	        <ImageButton
@@ -78,6 +79,7 @@
             android:layout_column="0"
             android:layout_row="4"
             android:layout_gravity="center_horizontal"
+            android:saveEnabled="false"
             android:contentDescription="@string/micgain"/>
 
 	        <ImageButton

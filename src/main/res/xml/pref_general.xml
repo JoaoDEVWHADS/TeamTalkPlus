@@ -10,15 +10,6 @@
 
 
 	<ListPreference
-		android:key="pref_language"
-		android:title="@string/pref_title_language"
-		android:summary="@string/pref_summary_language"
-		android:entries="@array/language_entries"
-		android:entryValues="@array/language_values"
-		android:defaultValue="default" />
-
-
-	<ListPreference
 		android:key="gender_list"
 		android:title="@string/pref_title_gender"
 		android:summary="@string/pref_summary_gender"

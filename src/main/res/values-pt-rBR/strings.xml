@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="action_add">Adicionar</string>
-    <string name="action_banchan">Banir do canal atual</string>
+    <string name="action_banchan">Banir do canal</string>
     <string name="action_banned_users">Banidos do canal</string>
     <string name="action_bans_short">Banidos</string>
     <string name="action_bansrv">Banir do servidor</string>
@@ -18,9 +18,15 @@
     <string name="action_exit">Sair</string>
     <string name="action_export_serverlist">Exportar lista de servidores</string>
     <string name="action_exportsrv">Exportar servidor</string>
-    <string name="action_import_serverlist">Importar através de um arquivo</string>
+    <string name="action_import_serverlist">Importar de um arquivo .tt</string>
+
+    <!-- Generic Format Strings for TTS/Accessibility -->
+    <string name="tts_fmt_2">%1$s %2$s</string>
+    <string name="tts_fmt_3">%1$s %2$s %3$s</string>
+    <string name="user_accessibility_desc">%1$s %2$s %3$s %4$s</string>
+    <string name="user_status_fmt">%1$s %2$s</string>
     <string name="action_join">Entrar</string>
-    <string name="action_kickchan">Expulsar do canal atual</string>
+    <string name="action_kickchan">Expulsar do canal</string>
     <string name="action_kicksrv">Expulsar do servidor</string>
     <string name="action_leave">Sair do canal</string>
     <string name="action_make_operator">Conceder Operador</string>
@@ -50,7 +56,7 @@
     <string name="action_upload">Enviar arquivo</string>
     <string name="alert_file_override">O arquivo %1$s já existe. Deseja substituí-lo?</string>
     <string name="anonymous_account">Anônimo</string>
-    <string name="app_name">TeamTalk 5</string>
+    <string name="app_name">Team Talk Plus</string>
     <string name="title_activity_user_prop">Propriedades de Usuário</string>
     <string name="mic_input_selection">Seleção de Entrada de Microfone</string>
     <string name="mic_input_default">Padrão (Decisão do Sistema)</string>
@@ -161,7 +167,7 @@
     <string name="err_retrieve_public_server_list">Erro ao obter a lista de servidores públicos</string>
     <string name="err_send_text_message">Erro ao enviar mensagem</string>
     <string name="err_server_banned">Você está banido</string>
-    <string name="err_service_not_available">Serviço TeamTalk Plus não disponível</string>
+    <string name="err_service_not_available">Serviço Team Talk Plus não disponível</string>
     <string name="err_stream_media">Erro ao transmitir arquivo de mídia</string>
     <string name="err_update_server_props_failed">Falha ao atualizar propriedades do servidor</string>
     <string name="err_user_account_request_failed">Falha ao enviar pedido de conta</string>
@@ -314,14 +320,14 @@
     <string name="permission_filetx">O envio e importação de arquivos não poderá ser usado</string>
     <string name="permission_imagetx">O envio de imagens não estará disponível</string>
     <string name="permission_internet">O cliente não poderá conectar em servidores</string>
-    <string name="permission_post_notifications">TeamTalk Plus não poderá enviar notificações</string>
+    <string name="permission_post_notifications">Team Talk Plus não poderá enviar notificações</string>
     <string name="permission_read_phone_state">Não será possível a detecção de chamadas</string>
     <string name="permission_vibrate">A opção vibrar ao pressionar o botão transmitir não poderá ser ativada</string>
     <string name="permission_videotx">Arquivos de vídeo não estarão disponíveis para envio e transmissão</string>
     <string name="permission_wake_lock">A conexão com o servidor talvez caia quando a tela for bloqueada</string>
     <string name="pref_cat_about">Sobre</string>
     <string name="pref_cat_connection_general">Geral</string>
-    <string name="pref_cat_display">Tela</string>
+    <string name="pref_cat_display">Aparência</string>
     <string name="pref_cat_subscriptions">Subscrições</string>
     <string name="pref_cat_tts">Configurar as mensagens anunciadas pelo leitor de telas</string>
     <string name="pref_cat_tts_events">Mensagens gerais de texto para voz</string>
@@ -567,8 +573,8 @@
     <string name="sort_server_location">Localização/País</string>
     <string name="sort_server_name_asc">Nome (A-Z)</string>
     <string name="sort_server_name_desc">Nome (Z-A)</string>
-    <string name="speaker_mute">Desativar som</string>
-    <string name="speaker_unmute">Ativar som</string>
+    <string name="speaker_mute">Silenciar alto-falantes</string>
+    <string name="speaker_unmute">Ativar alto-falantes</string>
     <string name="speaker_volume_description">O volume do alto-falantes é %1$s</string>
     <string name="speexinterval">Intervalo de transmissão</string>
     <string name="speexquality">Qualidade</string>
@@ -703,11 +709,11 @@
     <string name="title_activity_audio_codec">Codec de audio</string>
     <string name="title_activity_channel_banned_users">Banidos do canal</string>
     <string name="title_activity_channel_prop">Propriedades do canal</string>
-    <string name="title_activity_main">TeamTalk Plus para Android</string>
+    <string name="title_activity_main">Team Talk Plus para Android</string>
     <string name="title_activity_preferences">Preferências</string>
     <string name="title_activity_server_banned_users">Banidos do servidor</string>
     <string name="title_activity_server_entry">Propriedades do servidor</string>
-    <string name="title_activity_server_list">TeamTalk Plus</string>
+    <string name="title_activity_server_list">Team Talk Plus</string>
     <string name="title_activity_server_stats">Estatísticas do servidor</string>
     <string name="title_activity_stream_media">Transmitir arquivo de mídia</string>
     <string name="title_activity_text_message">Mensagem de texto</string>
@@ -740,8 +746,8 @@
     <string name="total_rx_bytes">Total RX</string>
     <string name="total_tx_bytes">Total TX</string>
     <string name="transfer_stopped">Transferência pausada</string>
-    <string name="ttdllversion">TeamTalk Plus DLL v</string>
-    <string name="ttversion">TeamTalk Plus v</string>
+    <string name="ttdllversion">Team Talk Plus DLL v</string>
+    <string name="ttversion">Team Talk Plus v</string>
     <string name="tx_off">Transmitir</string>
     <string name="tx_on">Transmitindo</string>
     <string name="type_admin">Administrador</string>

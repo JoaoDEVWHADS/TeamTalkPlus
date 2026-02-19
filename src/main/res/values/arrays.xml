@@ -5,11 +5,37 @@
         <item>English</item>
         <item>Português (Europeu/Africano)</item>
         <item>Português (Brasil)</item>
+        <item>Bahasa Indonesia</item>
+        <item>العربية (العراق)</item>
     </string-array>
     <string-array name="language_values">
         <item>default</item>
         <item>en</item>
         <item>pt</item>
         <item>pt_BR</item>
+        <item>in</item>
+        <item>ar_rIQ</item>
+    </string-array>
+    <string-array name="channel_sort_entries">
+        <item>@string/sort_default</item>
+        <item>@string/sort_za</item>
+        <item>@string/sort_popularity</item>
+    </string-array>
+    <string-array name="channel_sort_values">
+        <item>0</item> <!-- Default A-Z -->
+        <item>1</item> <!-- Z-A -->
+        <item>2</item> <!-- Popularity -->
+    </string-array>
+    <string-array name="font_scale_entries">
+        <item>Small</item>
+        <item>Normal</item>
+        <item>Large</item>
+        <item>Extra Large</item>
+    </string-array>
+    <string-array name="font_scale_values">
+        <item>0.85</item>
+        <item>1.0</item>
+        <item>1.15</item>
+        <item>1.30</item>
     </string-array>
 </resources>

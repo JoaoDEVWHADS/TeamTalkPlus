@@ -251,12 +251,19 @@ public class TextMessageAdapter extends BaseAdapter {
         convertView.setAccessibilityDelegate(accessibilityAssistant);
 
         android.content.SharedPreferences prefs = android.preference.PreferenceManager.getDefaultSharedPreferences(parent.getContext());
-        String scaleStr = prefs.getString("pref_display_font_scale", "1.0");
         float scale = 1.0f;
         try {
-            scale = Float.parseFloat(scaleStr);
-        } catch (NumberFormatException e) {
-            scale = 1.0f;
+            // Try reading as int (new format: 50-300)
+            int scaleInt = prefs.getInt("pref_display_font_scale", 100);
+            scale = scaleInt / 100.0f;
+        } catch (ClassCastException e) {
+            // Fallback: Try reading as string (old format: "1.0")
+            try {
+                String scaleStr = prefs.getString("pref_display_font_scale", "1.0");
+                scale = Float.parseFloat(scaleStr);
+            } catch (Exception ex) {
+                scale = 1.0f;
+            }
         }
 
         if (convertView instanceof ViewGroup) {
