@@ -4,12 +4,12 @@ updates:
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
-      interval: "weekly" # Verifica atualizações uma vez por semana
+      interval: "daily" # Verifica atualizações todos os dias (limite máximo nativo do Dependabot)
     open-pull-requests-limit: 5
 
   # Monitora dependências dos workflows do GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "daily" # Verifica todos os dias
     open-pull-requests-limit: 5
