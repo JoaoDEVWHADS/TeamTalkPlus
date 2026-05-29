@@ -69,9 +69,7 @@ android {
     }
     buildTypes {
         release {
-            if (file("release.keystore").exists()) {
-                signingConfig signingConfigs.release
-            }
+            signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'teamtalk-proguard-rules.txt'
