@@ -27,7 +27,10 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import dk.bearware.Codec;
+import dk.bearware.MediaFileInfo;
 import dk.bearware.TeamTalkBase;
+import dk.bearware.UserAccount;
+import dk.bearware.UserRight;
 import dk.bearware.VideoCodec;
 import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
@@ -52,8 +55,8 @@ extends AppCompatActivity implements TeamTalkConnectionListener {
     }
 
     @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
     }
 
     @Override
@@ -67,7 +70,18 @@ extends AppCompatActivity implements TeamTalkConnectionListener {
         getSupportActionBar().setTitle(R.string.title_activity_stream_media);
         Utils.announceAccessibilityTitle(this, R.string.title_activity_stream_media);
         file_path = this.findViewById(R.id.file_path_txt);
-        file_path.setText(PreferenceManager.getDefaultSharedPreferences(getBaseContext()).getString(lastMedia, ""));
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+        String savedPath = prefs.getString(lastMedia, "");
+        // Only restore saved path if the file still exists and is readable
+        if (!savedPath.isEmpty()) {
+            File f = new File(savedPath);
+            if (f.exists() && f.canRead()) {
+                file_path.setText(savedPath);
+            } else {
+                // Stale path — clear it so user knows they need to re-select
+                prefs.edit().remove(lastMedia).apply();
+            }
+        }
     }
 
     @Override
@@ -113,7 +127,7 @@ extends AppCompatActivity implements TeamTalkConnectionListener {
     public void onRequestPermissionsResult(int requestCode,
                                            @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        Permissions granted = Permissions.onRequestResult(this, requestCode, grantResults);
+        Permissions granted = Permissions.onRequestResult(this, requestCode, permissions, grantResults);
         if (granted == null)
             return;
         switch (granted) {
@@ -134,30 +148,52 @@ extends AppCompatActivity implements TeamTalkConnectionListener {
         Button stream_btn = this.findViewById(R.id.media_file_stream_btn);
 
         OnClickListener listener = v -> {
-            switch(v.getId()) {
-                case R.id.media_file_select_btn :
+            if (v.getId() == R.id.media_file_select_btn) {
                 if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ?
-                    requestMediaPermissions() :
-                    Permissions.READ_EXTERNAL_STORAGE.request(this)) {
-                        mediaSelectionStart();
-                    }
-                    break;
-                case R.id.media_file_stream_btn :
-                    String path = file_path.getText().toString();
-                    if(path.isEmpty())
-                        return;
-                    VideoCodec videocodec = new VideoCodec();
-                    videocodec.nCodec = Codec.NO_CODEC;
-                    if (!getClient().startStreamingMediaFileToChannel(path, videocodec)) {
+                requestMediaPermissions() :
+                Permissions.READ_EXTERNAL_STORAGE.request(this)) {
+                mediaSelectionStart();
+                }
+            } else if (v.getId() == R.id.media_file_stream_btn) {
+                String path = file_path.getText().toString();
+                if (path.isEmpty())
+                    return;
+
+                // Check for transmission rights
+                UserAccount myAccount = new UserAccount();
+                if (!getClient().getMyUserAccount(myAccount) || 
+                    (myAccount.uUserRights & UserRight.USERRIGHT_TRANSMIT_MEDIAFILE_AUDIO) == 0) {
+                    Toast.makeText(StreamMediaActivity.this,
+                        R.string.err_not_authorized,
+                        Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+                // Verify the file/URL is accessible before passing to native SDK
+                boolean isUrl = path.toLowerCase().startsWith("http://") || 
+                                path.toLowerCase().startsWith("https://");
+                
+                if (!isUrl) {
+                    File mediaFile = new File(path);
+                    if (!mediaFile.exists() || !mediaFile.canRead()) {
                         Toast.makeText(StreamMediaActivity.this,
+                            R.string.err_resolve_file_path,
+                            Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                }
+
+                VideoCodec videocodec = new VideoCodec();
+                videocodec.nCodec = Codec.NO_CODEC;
+                if (!getClient().startStreamingMediaFileToChannel(path, videocodec)) {
+                    Toast.makeText(StreamMediaActivity.this,
                         R.string.err_stream_media,
                         Toast.LENGTH_LONG).show();
-                    } else {
-                        SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(getBaseContext()).edit();
-                        editor.putString(lastMedia, path).apply();
-                        finish();
-                    }
-                    break;
+                } else {
+                    SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(getBaseContext()).edit();
+                    editor.putString(lastMedia, path).apply();
+                    finish();
+                }
             }
         };
 
@@ -177,7 +213,7 @@ extends AppCompatActivity implements TeamTalkConnectionListener {
             if (path != null) {
                 file_path.setText(path);
             } else {
-                 new FileCopyingTask().execute(uri);
+                Toast.makeText(StreamMediaActivity.this, R.string.err_resolve_file_path, Toast.LENGTH_LONG).show();
             }
         }
         else {
@@ -189,7 +225,7 @@ extends AppCompatActivity implements TeamTalkConnectionListener {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
-        Intent i = Intent.createChooser(intent, "File");
+        Intent i = Intent.createChooser(intent, getString(R.string.label_file));
         startActivityForResult(i, REQUEST_STREAM_MEDIA);
     }
 
@@ -202,53 +238,6 @@ extends AppCompatActivity implements TeamTalkConnectionListener {
     private boolean areMediaPermissionsComplete() {
         return !(Permissions.READ_MEDIA_VIDEO.isPending() ||
                  Permissions.READ_MEDIA_AUDIO.isPending());
-    }
-
-    private class FileCopyingTask extends AsyncTask<Uri, Void, String> {
-
-        @Override
-        protected String doInBackground(Uri... uris) {
-            Uri uri = uris[0];
-            Cursor cursor = getContentResolver().query(uri, null, null, null, null);
-            int columnIndex = ((cursor != null) && cursor.moveToFirst()) ? cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME) : -1;
-            if (columnIndex >= 0) {
-                File transitFile = new File(getCacheDir(), cursor.getString(columnIndex));
-                cursor.close();
-                try {
-                    if (((!transitFile.exists()) || transitFile.delete()) && transitFile.createNewFile()) {
-                        transitFile.deleteOnExit();
-                    } else {
-                        return null;
-                    }
-                } catch (Exception ex) {
-                    return null;
-                }
-                try (InputStream src = getContentResolver().openInputStream(uri);
-                     FileOutputStream dest = new FileOutputStream(transitFile)) {
-                    byte[] buffer = new byte[1024];
-                    int read;
-                    while ((read = src.read(buffer)) > 0) {
-                        dest.write(buffer, 0, read);
-                    }
-                } catch (Exception ex) {
-                    return null;
-                }
-                return transitFile.getPath();
-            } else if (cursor != null) {
-                cursor.close();
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(String path) {
-            if (path != null) {
-                file_path.setText(path);
-            } else {
-                Toast.makeText(StreamMediaActivity.this, R.string.err_resolve_file_path, Toast.LENGTH_LONG).show();
-            }
-        }
-
     }
 
 }

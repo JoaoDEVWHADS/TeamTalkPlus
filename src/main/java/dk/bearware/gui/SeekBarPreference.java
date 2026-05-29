@@ -2,6 +2,7 @@
 package dk.bearware.gui;
 
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.preference.DialogPreference;
 import android.util.AttributeSet;
 import android.view.Gravity;
@@ -16,43 +17,48 @@ public class SeekBarPreference extends DialogPreference implements
 
     // Default values
     private static final int DEFAULT_VALUE = 100;
-    private static final int MIN_VALUE = 50;
-    private static final int MAX_VALUE = 300;
+    private static final int DEFAULT_MIN_VALUE = 0;
+    private static final int DEFAULT_MAX_VALUE = 100;
 
     private int mValue = DEFAULT_VALUE;
+    private int mMin = DEFAULT_MIN_VALUE;
+    private int mMax = DEFAULT_MAX_VALUE;
     private TextView mValueText;
 
     public SeekBarPreference(Context context, AttributeSet attrs) {
         super(context, attrs);
         setupLayout(context, attrs);
-        // Load default value if provided (though mostly handled by persist)
-        mValue = attrs.getAttributeIntValue("http://schemas.android.com/apk/res/android", "defaultValue", DEFAULT_VALUE);
     }
 
     public SeekBarPreference(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
         setupLayout(context, attrs);
-        mValue = attrs.getAttributeIntValue("http://schemas.android.com/apk/res/android", "defaultValue", DEFAULT_VALUE);
     }
 
     private void setupLayout(Context context, AttributeSet attrs) {
-        // Can read custom attributes here if defined
+        mValue = attrs.getAttributeIntValue("http://schemas.android.com/apk/res/android", "defaultValue", DEFAULT_VALUE);
+
+        TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.SeekBarPreference);
+        mMin = a.getInt(R.styleable.SeekBarPreference_min, DEFAULT_MIN_VALUE);
+        mMax = a.getInt(R.styleable.SeekBarPreference_android_max, DEFAULT_MAX_VALUE);
+        a.recycle();
     }
 
     @Override
     protected View onCreateDialogView() {
         LinearLayout view = new LinearLayout(getContext());
         view.setOrientation(LinearLayout.VERTICAL);
-        view.setPadding(20, 20, 20, 20);
+        int padding = getContext().getResources().getDimensionPixelSize(R.dimen.spacing_medium);
+        view.setPadding(padding, padding, padding, padding);
 
         mValueText = new TextView(getContext());
         mValueText.setGravity(Gravity.CENTER_HORIZONTAL);
-        mValueText.setTextSize(18);
+        mValueText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, getContext().getResources().getDimension(R.dimen.text_size_preference));
         view.addView(mValueText);
 
         SeekBar seek = new SeekBar(getContext());
-        // Range: 0 to (MAX - MIN) i.e. 0 to 250
-        seek.setMax(MAX_VALUE - MIN_VALUE);
+        // Range: 0 to (MAX - MIN)
+        seek.setMax(mMax - mMin);
         
         // Load persisted value
         if (shouldPersist()) {
@@ -72,10 +78,10 @@ public class SeekBarPreference extends DialogPreference implements
         }
 
         // Ensure value is within bounds
-        if (mValue < MIN_VALUE) mValue = MIN_VALUE;
-        if (mValue > MAX_VALUE) mValue = MAX_VALUE;
+        if (mValue < mMin) mValue = mMin;
+        if (mValue > mMax) mValue = mMax;
 
-        seek.setProgress(mValue - MIN_VALUE);
+        seek.setProgress(mValue - mMin);
         updateValueText(mValue);
         
         seek.setOnSeekBarChangeListener(this);
@@ -86,7 +92,7 @@ public class SeekBarPreference extends DialogPreference implements
 
     private void updateValueText(int value) {
         if (mValueText != null) {
-            mValueText.setText(value + "%");
+            mValueText.setText(value + getContext().getString(R.string.unit_percent));
         }
     }
 
@@ -100,7 +106,7 @@ public class SeekBarPreference extends DialogPreference implements
 
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-        mValue = progress + MIN_VALUE;
+        mValue = progress + mMin;
         updateValueText(mValue);
     }
 

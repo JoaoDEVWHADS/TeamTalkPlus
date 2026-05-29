@@ -14,7 +14,8 @@
         android:layout_height="wrap_content"
         android:text="@string/pref_title_statusmode"
         android:textAppearance="?android:attr/textAppearanceMedium"
-        android:layout_marginBottom="8dp"/>
+        android:layout_marginBottom="8dp"
+        android:labelFor="@+id/status_spinner"/>
 
     <Spinner
         android:id="@+id/status_spinner"

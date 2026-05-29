@@ -1,236 +1,289 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:paddingBottom="@dimen/activity_vertical_margin"
-    android:paddingLeft="@dimen/activity_horizontal_margin"
-    android:paddingRight="@dimen/activity_horizontal_margin"
-    android:paddingTop="@dimen/activity_vertical_margin"
     tools:context=".ChannelPropActivity" >
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal" >
+        android:orientation="vertical"
+        android:paddingBottom="@dimen/activity_vertical_margin"
+        android:paddingLeft="@dimen/activity_horizontal_margin"
+        android:paddingRight="@dimen/activity_horizontal_margin"
+        android:paddingTop="@dimen/activity_vertical_margin">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_name" />
+            android:orientation="horizontal" >
 
-        <EditText
-            android:id="@+id/channame"
-            android:layout_width="fill_parent"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_name" />
+
+            <EditText
+                android:id="@+id/channame"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="text"
+                android:singleLine="true"
+                android:hint="@string/channamelab"
+                android:importantForAutofill="no">
+            </EditText>
+            <ImageButton
+                android:id="@+id/btn_copy_channame"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_share"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_copy_channelname" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="text"
-            android:singleLine="true"
-            android:hint="@string/channamelab"
-            android:importantForAutofill="no">
-        </EditText>
-    </LinearLayout>
+            android:orientation="horizontal" >
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal" >
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_password" />
 
-        <TextView
-            android:layout_width="wrap_content"
+            <EditText
+                android:id="@+id/chanpasswd"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="textPassword"
+                android:lines="1"
+                android:hint="@string/chanpswlab"
+                android:importantForAutofill="no" />
+
+            <ImageButton
+                android:id="@+id/btn_toggle_chanpasswd"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_view"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_show_password" />
+
+            <ImageButton
+                android:id="@+id/btn_copy_chanpasswd"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_share"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_copy_password" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_password" />
+            android:orientation="horizontal" >
 
-        <EditText
-            android:id="@+id/chanpasswd"
-            android:layout_width="fill_parent"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_topic" />
+
+            <EditText
+                android:id="@+id/chantopic"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="text"
+                android:lines="3"
+                android:hint="@string/chantopiclab"
+                android:importantForAutofill="no" >
+            </EditText>
+            <ImageButton
+                android:id="@+id/btn_copy_chantopic"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_share"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_copy_note" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textPassword"
-            android:lines="1"
-            android:hint="@string/chanpswlab"
-            android:importantForAutofill="no">
-        </EditText>
-    </LinearLayout>
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal" >
+            android:orientation="horizontal" >
 
-        <TextView
-            android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_op_password"
+                />
+
+            <EditText
+                android:id="@+id/chanoppasswd"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="textPassword"
+                android:lines="1"
+                android:hint="@string/chanoppswlab"
+                android:importantForAutofill="no" />
+
+            <ImageButton
+                android:id="@+id/btn_toggle_chanoppasswd"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_view"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_show_password" />
+
+            <ImageButton
+                android:id="@+id/btn_copy_chanoppasswd"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_share"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_copy_password" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_topic" />
+            android:orientation="horizontal" >
 
-        <EditText
-            android:id="@+id/chantopic"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:inputType="text"
-            android:lines="3"
-            android:hint="@string/chantopiclab"
-            android:importantForAutofill="no" >
-        </EditText>
-    </LinearLayout>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_maxusers"
+                />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal" >
+            <SeekBar
+                android:id="@+id/chanmaxusers_seekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_gravity="center_vertical" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_op_password"
-            />
-
-        <EditText
-            android:id="@+id/chanoppasswd"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:inputType="textPassword"
-            android:lines="1"
-            android:hint="@string/chanoppswlab"
-            android:importantForAutofill="no" >
-        </EditText>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal" >
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_maxusers"
-            />
-
-        <EditText
-            android:id="@+id/chanmaxusers"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ems="10"
-            android:inputType="number"
-            android:hint="@string/maxuserslab"
-            android:importantForAutofill="no" />
-
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal" >
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_diskquota"
-            />
-
-        <EditText
-            android:id="@+id/chandiskquota"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ems="10"
-            android:inputType="number"
-            android:hint="@string/diskquotalab"
-            android:importantForAutofill="no" />
-
-    </LinearLayout>
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal" >
-
-        <Button
-            android:id="@+id/setup_audcodec_btn"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/title_activity_audio_codec" />
-
-	</LinearLayout>
-
-    <CheckBox
-        android:id="@+id/chan_fixed_volume"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/channel_prop_title_fixed_volume" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal" >
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_gain_level" />
-
-        <SeekBar
-            android:id="@+id/chan_gain_level"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:max="32000" />
-        
-        <TextView
-            android:id="@+id/chan_gain_level_value"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="0"
-            android:ems="3"
-            android:gravity="right" />
-
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical" >
-
-        <CheckBox
-            android:id="@+id/chan_permanent"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_permanent" />
-
-        <CheckBox
-            android:id="@+id/chan_nointerrupt"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_nointerrupt" />
-
-        <CheckBox
-            android:id="@+id/chan_classroom"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_classroom" />
-
-        <CheckBox
-            android:id="@+id/chan_oprecvonly"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_oprecvonly" />
-
-        <CheckBox
-            android:id="@+id/chan_novoiceact"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_novoiceact" />
-
-        <CheckBox
-            android:id="@+id/chan_noaudiorecord"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_noaudiorecord" />
-
-        <CheckBox
-            android:id="@+id/chan_hidden"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/channel_prop_title_hiddenchannel" />
+            <EditText
+                android:id="@+id/chanmaxusers"
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:hint="@string/maxuserslab"
+                android:importantForAutofill="no" />
 
         </LinearLayout>
 
-</LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_diskquota"
+                />
+
+            <SeekBar
+                android:id="@+id/chandiskquota_seekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_gravity="center_vertical" />
+
+            <EditText
+                android:id="@+id/chandiskquota"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:hint="@string/diskquotalab"
+                android:importantForAutofill="no" />
+
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" >
+
+            <Button
+                android:id="@+id/setup_audcodec_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/title_activity_audio_codec" />
+
+            <TextView
+                android:id="@+id/setup_audcodec_summary"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="10dp"
+                android:textAppearance="?android:attr/textAppearanceSmall" />
+
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/channel_type_group"
+            android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" >
+
+            <CheckBox
+                android:id="@+id/chan_permanent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_permanent" />
+
+            <CheckBox
+                android:id="@+id/chan_nointerrupt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_nointerrupt" />
+
+            <CheckBox
+                android:id="@+id/chan_classroom"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_classroom" />
+
+            <CheckBox
+                android:id="@+id/chan_oprecvonly"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_oprecvonly" />
+
+            <CheckBox
+                android:id="@+id/chan_novoiceact"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_novoiceact" />
+
+            <CheckBox
+                android:id="@+id/chan_hidden"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_hiddenchannel" />
+
+            <CheckBox
+                android:id="@+id/chan_noaudiorecord"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_noaudiorecord"
+                android:visibility="visible" />
+
+            <CheckBox
+                android:id="@+id/chan_join_on_create"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_join_on_create"
+                android:checked="false" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,17 @@
+<resources>
+
+    <string name="title_import_server">Impor Server</string>
+    <string name="msg_import_server_confirmation">Apakah Anda ingin mengimpor server: %1$s?</string>
+    <string name="action_import">Impor</string>
+    <string name="action_import_connect">Impor &amp; Hubungkan</string>
+    <string name="msg_server_imported">Server berhasil diimpor</string>
+    <string name="err_file_read">Kesalahan membaca file</string>
+    <string name="title_select_server">Pilih Server untuk Dibuka</string>
+    <string name="title_export_servers">Ekspor Server</string>
+    <string name="msg_choose_export_method">Apakah Anda ingin mengekspor semua server atau memilih yang tertentu?</string>
+    <string name="action_export_all">Ekspor Semua</string>
+    <string name="action_choose_servers">Pilih</string>
+    <string name="msg_no_servers_selected">Tidak ada server yang dipilih.</string>
+    <string name="msg_import_multiple_servers_confirmation">Apakah Anda ingin mengimpor %1$d server?</string>
+
+</resources>

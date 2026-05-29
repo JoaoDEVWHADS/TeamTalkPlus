@@ -32,8 +32,8 @@ public class ServerStatisticsActivity extends AppCompatActivity implements TeamT
     }
 
     @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
     }
 
     @Override

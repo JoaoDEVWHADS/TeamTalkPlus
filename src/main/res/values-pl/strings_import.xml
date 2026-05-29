@@ -1,0 +1,17 @@
+<resources>
+
+    <string name="title_import_server">Importuj serwer</string>
+    <string name="msg_import_server_confirmation">Czy chcesz zaimportować serwer: %1$s?</string>
+    <string name="action_import">Importuj</string>
+    <string name="action_import_connect">Importuj i połącz</string>
+    <string name="msg_server_imported">Serwery zostały pomyślnie zaimportowane</string>
+    <string name="err_file_read">Błąd odczytu pliku</string>
+    <string name="title_select_server">Wybierz serwer do otwarcia</string>
+    <string name="title_export_servers">Eksportuj serwery</string>
+    <string name="msg_choose_export_method">Czy chcesz wyeksportować wszystkie serwery czy wybrać konkretne?</string>
+    <string name="action_export_all">Eksportuj wszystkie</string>
+    <string name="action_choose_servers">Wybierz</string>
+    <string name="msg_no_servers_selected">Nie wybrano żadnych serwerów.</string>
+    <string name="msg_import_multiple_servers_confirmation">Czy chcesz zaimportować %1$d serwerów?</string>
+
+</resources>

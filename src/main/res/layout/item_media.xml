@@ -4,6 +4,16 @@
     android:layout_height="match_parent"
     android:orientation="vertical" >
 
+    <TextView
+        android:id="@+id/media_source_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:textStyle="bold"
+        android:background="#44000000"
+        android:textColor="@android:color/white"
+        android:text="@string/no_nickname" />
+
     <ImageView
         android:id="@+id/user_desktop_image"
         android:layout_width="match_parent"

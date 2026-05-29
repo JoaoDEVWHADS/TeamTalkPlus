@@ -3,19 +3,38 @@
     <string-array name="language_entries">
         <item>System Default</item>
         <item>English</item>
-        <item>Português (Europeu/Africano)</item>
-        <item>Português (Brasil)</item>
-        <item>Bahasa Indonesia</item>
-        <item>العربية (العراق)</item>
+        <item>Portuguese (European/African)</item>
+        <item>Portuguese (Brazil)</item>
+        <item>Indonesian</item>
+        <item>Bulgarian</item>
+        <item>Spanish (Latin America)</item>
+        <item>Spanish (Spain/Europe)</item>
+        <item>Arabic (Iraq)</item>
+        <item>Arabic (Standard)</item>
+        <item>Russian</item>
+        <item>Polish</item>
+        <item>Persian (Farsi)</item>
+        <item>Chinese (Simplified)</item>
+        <item>Chinese (Traditional)</item>
     </string-array>
     <string-array name="language_values">
         <item>default</item>
         <item>en</item>
-        <item>pt</item>
-        <item>pt_BR</item>
+        <item>pt-PT</item>
+        <item>pt-BR</item>
         <item>in</item>
-        <item>ar_rIQ</item>
+        <item>bg</item>
+        <item>es</item>
+        <item>es-ES</item>
+        <item>ar-IQ</item>
+        <item>ar</item>
+        <item>ru</item>
+        <item>pl</item>
+        <item>fa</item>
+        <item>zh-CN</item>
+        <item>zh-TW</item>
     </string-array>
+
     <string-array name="channel_sort_entries">
         <item>@string/sort_default</item>
         <item>@string/sort_za</item>
@@ -27,10 +46,10 @@
         <item>2</item> <!-- Popularity -->
     </string-array>
     <string-array name="font_scale_entries">
-        <item>Small</item>
-        <item>Normal</item>
-        <item>Large</item>
-        <item>Extra Large</item>
+        <item>@string/font_scale_small</item>
+        <item>@string/font_scale_normal</item>
+        <item>@string/font_scale_large</item>
+        <item>@string/font_scale_xlarge</item>
     </string-array>
     <string-array name="font_scale_values">
         <item>0.85</item>

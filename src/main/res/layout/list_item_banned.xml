@@ -4,8 +4,8 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="8dp"
-    android:background="#FFFFFF">
+    android:padding="@dimen/spacing_small"
+    android:background="@color/item_background_white">
 
     <CheckBox
         android:id="@+id/checkbox_banned"
@@ -18,7 +18,7 @@
         android:id="@+id/text_banned_name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:paddingStart="8dp"
-        android:textSize="18sp"
-        android:textColor="#000000" />
+        android:paddingStart="@dimen/spacing_small"
+        android:textSize="@dimen/text_size_preference"
+        android:textColor="@color/text_black" />
 </LinearLayout>

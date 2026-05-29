@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_medium">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/scope_you"
+            android:textStyle="bold"
+            android:textSize="@dimen/text_size_medium"
+            android:layout_marginBottom="@dimen/spacing_small"/>
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_voice_local"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/user_prop_title_subscribe_voice"
+            android:layout_marginBottom="@dimen/spacing_small"/>
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_vid_local"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/user_prop_title_subscribe_vid"
+            android:layout_marginBottom="@dimen/spacing_small"/>
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_desk_local"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/user_prop_title_subscribe_desk"
+            android:layout_marginBottom="@dimen/spacing_small"/>
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_media_local"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/user_prop_title_subscribe_media"
+            android:layout_marginBottom="@dimen/spacing_small"/>
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_msg_local"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/user_prop_title_subscribe_user_msg"
+            android:layout_marginBottom="@dimen/spacing_medium"/>
+
+    </LinearLayout>
+</ScrollView>

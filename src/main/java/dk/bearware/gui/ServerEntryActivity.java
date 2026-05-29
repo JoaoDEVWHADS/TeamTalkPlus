@@ -50,8 +50,8 @@ public class ServerEntryActivity extends AppCompatActivity
     }
 
     @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
     }
 
     @Override
@@ -63,9 +63,10 @@ public class ServerEntryActivity extends AppCompatActivity
         EdgeToEdgeHelper.enableEdgeToEdge(this);
 
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-
         setupListeners();
     }
+
+    private boolean isCheckingProgrammatically = false;
 
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
@@ -81,18 +82,30 @@ public class ServerEntryActivity extends AppCompatActivity
 
     private void setupListeners() {
         binding.webLoginCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> onWebLoginChanged(isChecked));
-        binding.rememberLastChannelCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> setChannelViewsVisibility(!isChecked));
+        binding.rememberLastChannelCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            setChannelViewsEnabled(!isChecked);
+            if (!isCheckingProgrammatically) {
+                binding.channelEdit.setText("");
+                binding.channelPasswordEdit.setText("");
+            }
+        });
 
         binding.tcpPortEdit.addTextChangedListener(new PortTextWatcher(binding.tcpPortEdit));
         binding.udpPortEdit.addTextChangedListener(new PortTextWatcher(binding.udpPortEdit));
     }
 
-    private void setChannelViewsVisibility(boolean visible) {
-        int visibility = visible ? View.VISIBLE : View.GONE;
-        binding.channelLabel.setVisibility(visibility);
-        binding.channelLayout.setVisibility(visibility);
-        binding.channelPasswordLabel.setVisibility(visibility);
-        binding.channelPasswordLayout.setVisibility(visibility);
+    private void setChannelViewsEnabled(boolean enabled) {
+        binding.channelEdit.setEnabled(enabled);
+        binding.channelPasswordEdit.setEnabled(enabled);
+        binding.channelLayout.setEnabled(enabled);
+        binding.channelPasswordLayout.setEnabled(enabled);
+        
+        // Optional: Change alpha to visually indicate disabled state more clearly
+        float alpha = enabled ? 1.0f : 0.5f;
+        binding.channelLabel.setAlpha(alpha);
+        binding.channelLayout.setAlpha(alpha);
+        binding.channelPasswordLabel.setAlpha(alpha);
+        binding.channelPasswordLayout.setAlpha(alpha);
     }
 
     private record PortTextWatcher(TextInputEditText editText) implements TextWatcher {
@@ -201,19 +214,15 @@ public class ServerEntryActivity extends AppCompatActivity
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.action_connect:
-                connectToServer();
-                break;
-            case R.id.action_saveserver:
-                saveServerAndFinish();
-                break;
-            case android.R.id.home:
-                setResult(RESULT_CANCELED);
-                finish();
-                break;
-            default:
-                return super.onOptionsItemSelected(item);
+        if (item.getItemId() == R.id.action_connect) {
+            connectToServer();
+        } else if (item.getItemId() == R.id.action_saveserver) {
+            saveServerAndFinish();
+        } else if (item.getItemId() == android.R.id.home) {
+            setResult(RESULT_CANCELED);
+            finish();
+        } else {
+            return super.onOptionsItemSelected(item);
         }
         return true;
     }
@@ -331,14 +340,16 @@ public class ServerEntryActivity extends AppCompatActivity
     }
 
     private void populateChannelSettings(ServerEntry entry) {
+        isCheckingProgrammatically = true;
         binding.rememberLastChannelCheckbox.setChecked(entry.rememberLastChannel);
+        isCheckingProgrammatically = false;
         binding.channelEdit.setText(entry.channel);
         binding.channelPasswordEdit.setText(entry.chanpasswd);
-        setChannelViewsVisibility(!entry.rememberLastChannel);
+        setChannelViewsEnabled(!entry.rememberLastChannel);
     }
 
     private String formatServerInfo(int titleResId, String value) {
-        return getString(titleResId) + ": " + value;
+        return getString(titleResId) + getString(R.string.label_value_delimiter) + value;
     }
 
     private void setAuthFieldsEnabled(boolean enabled) {

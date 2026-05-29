@@ -75,8 +75,8 @@ public class WebLoginActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
     }
 
     @Override

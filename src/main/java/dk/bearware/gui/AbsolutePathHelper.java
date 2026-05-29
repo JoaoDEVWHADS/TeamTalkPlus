@@ -4,6 +4,7 @@ package dk.bearware.gui;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
@@ -18,15 +19,23 @@ public class AbsolutePathHelper {
                 final String type = split[0];
                 if ("primary".equalsIgnoreCase(type)) {
                     return Environment.getExternalStorageDirectory() + "/" + split[1];
+                } else {
+                    // Fix: secondary storage paths need a leading '/'
+                    return "/storage/" + docId.replace(":", "/");
                 }
-                else {
-                    return "storage/" + docId.replace(":", "/");
+            } else if (isDownloadsDocument(uri)) {
+                final String id = DocumentsContract.getDocumentId(uri);
+                if (id != null && id.startsWith("raw:")) {
+                    return id.substring(4);
                 }
-            }
-            else if (isDownloadsDocument(uri)) {
-                return null;
-            }
-            else if (isMediaDocument(uri)) {
+                try {
+                    final Uri contentUri = android.content.ContentUris.withAppendedId(
+                            Uri.parse("content://downloads/public_downloads"), Long.valueOf(id));
+                    return getDataColumn(context, contentUri, null, null);
+                } catch (Exception e) {
+                    return null;
+                }
+            } else if (isMediaDocument(uri)) {
                 final String docId = DocumentsContract.getDocumentId(uri);
                 final String[] split = docId.split(":");
                 final String type = split[0];
@@ -41,18 +50,14 @@ public class AbsolutePathHelper {
                     return null;
                 }
                 final String selection = "_id=?";
-                final String[] selectionArgs = new String[]{
-                        split[1]
-                };
+                final String[] selectionArgs = new String[]{ split[1] };
                 return getDataColumn(context, contentUri, selection, selectionArgs);
             }
-        }
-        else if ("content".equalsIgnoreCase(uri.getScheme())) {
+        } else if ("content".equalsIgnoreCase(uri.getScheme())) {
             if (isGooglePhotosUri(uri))
                 return uri.getLastPathSegment();
             return getDataColumn(context, uri, null, null);
-        }
-        else if ("file".equalsIgnoreCase(uri.getScheme())) {
+        } else if ("file".equalsIgnoreCase(uri.getScheme())) {
             return uri.getPath();
         }
         return null;
@@ -62,17 +67,16 @@ public class AbsolutePathHelper {
                                        String[] selectionArgs) {
         Cursor cursor = null;
         final String column = "_data";
-        final String[] projection = {
-                column
-        };
-
+        final String[] projection = { column };
         try {
-            cursor = context.getContentResolver().query(uri, projection, selection, selectionArgs,
-                    null);
+            cursor = context.getContentResolver().query(uri, projection, selection, selectionArgs, null);
             if (cursor != null && cursor.moveToFirst()) {
-                final int index = cursor.getColumnIndexOrThrow(column);
-                return cursor.getString(index);
+                final int column_index = cursor.getColumnIndex(column);
+                if (column_index >= 0)
+                    return cursor.getString(column_index);
             }
+        } catch (Exception e) {
+            // Column may not exist on some devices/versions
         } finally {
             if (cursor != null)
                 cursor.close();

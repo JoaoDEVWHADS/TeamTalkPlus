@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
     </queries>
 
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.RECORD_AUDIO"></uses-permission>
 
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"></uses-permission>
 
     <uses-permission android:name="android.permission.INTERNET"></uses-permission>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"></uses-permission>
 
     <uses-permission android:name="android.permission.VIBRATE"></uses-permission>
 
@@ -29,18 +32,26 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"></uses-permission>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"></uses-permission>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"></uses-permission>
-    <uses-permission android:name="android.hardware.sensor.proximity"></uses-permission>
+    <uses-feature android:name="android.hardware.sensor.proximity" android:required="false" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".TeamTalkApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@drawable/teamtalk_blue"
-        android:label="@string/app_name"
+        android:label="TeamTalk Plus"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true"
+        android:supportsRtl="true"
+        android:extractNativeLibs="true"
+        android:localeConfig="@xml/locales_config">
 
-        android:supportsRtl="true">
+        <meta-data
+            android:name="androidx.appcompat.app.AppCompatDelegate.autoStoreLocales"
+            android:value="true" />
+
 
         <activity
             android:name=".WebLoginActivity"
@@ -50,7 +61,9 @@
 
         <activity
             android:name=".ServerListActivity"
+            android:configChanges="orientation|screenSize"
             android:icon="@drawable/teamtalk_blue"
+            android:label="TeamTalk Plus"
             android:launchMode="singleTop"
             android:exported="true">
 
@@ -66,6 +79,68 @@
 
                 <data android:scheme="tt" />
             </intent-filter>
+            
+            <!-- Filter for local files by path pattern -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.tt" />
+            </intent-filter>
+
+             <!-- Filter for content URIs (some file managers send path, some don't, but we rely on pattern if possible) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="*/*" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.tt" />
+            </intent-filter>
+
+            <!-- Fallback filters without host or with specific mime types but simpler -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.tt" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:pathPattern=".*\\.tt" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:pathPattern=".*\\.tt" />
+            </intent-filter>
+
+            <!-- Support for web links (teamtalk.bearware.dk/tt) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="teamtalk.bearware.dk" />
+                <data android:host="www.bearware.dk" />
+                <data android:pathPrefix="/tt" />
+                <data android:pathPrefix="/teamtalk" />
+            </intent-filter>
         </activity>
 
         <activity
@@ -75,7 +150,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation"
             android:launchMode="singleTop"
             android:windowSoftInputMode="stateUnchanged|adjustResize"
             android:exported="false">
@@ -106,6 +181,7 @@
         <activity
             android:name=".TextMessageActivity"
             android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="stateHidden|adjustResize"
             android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
@@ -124,7 +200,8 @@
 
         <activity
             android:name=".OnlineUsersActivity"
-            android:parentActivityName=".MainActivity">
+            android:parentActivityName=".MainActivity"
+            android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="dk.bearware.gui.MainActivity" />
@@ -132,21 +209,24 @@
 
         <activity
             android:name=".UserAccountsActivity"
-            android:parentActivityName=".MainActivity">
+            android:parentActivityName=".MainActivity"
+            android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="dk.bearware.gui.MainActivity" />
         </activity>
         <activity
             android:name=".ServerPropActivity"
-            android:parentActivityName=".MainActivity">
+            android:parentActivityName=".MainActivity"
+            android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="dk.bearware.gui.MainActivity" />
         </activity>
         <activity
             android:name=".UserAccountEditActivity"
-            android:parentActivityName=".UserAccountsActivity">
+            android:parentActivityName=".UserAccountsActivity"
+            android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="dk.bearware.gui.UserAccountsActivity" />
@@ -154,7 +234,8 @@
 
         <activity
             android:name=".ServerBannedUsersActivity"
-            android:parentActivityName=".MainActivity">
+            android:parentActivityName=".MainActivity"
+            android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="dk.bearware.gui.MainActivity" />
@@ -162,7 +243,8 @@
 
         <activity
             android:name=".ChannelBannedUsersActivity"
-            android:parentActivityName=".MainActivity">
+            android:parentActivityName=".MainActivity"
+            android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="dk.bearware.gui.MainActivity" />
@@ -170,7 +252,8 @@
 
         <activity
             android:name=".ServerStatisticsActivity"
-            android:parentActivityName=".MainActivity">
+            android:parentActivityName=".MainActivity"
+            android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="dk.bearware.gui.MainActivity" />
@@ -178,7 +261,8 @@
 
         <activity
             android:name=".MoveUsersActivity"
-            android:parentActivityName=".MainActivity">
+            android:parentActivityName=".MainActivity"
+            android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="dk.bearware.gui.MainActivity" />
@@ -191,6 +275,25 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

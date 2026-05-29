@@ -32,7 +32,6 @@
                 android:layout_height="wrap_content"
                 android:textSize="16sp" 
                 android:singleLine="true"
-                android:text="@string/string_extracted_725"
                 tools:ignore="HardcodedText" />
 
             <TextView

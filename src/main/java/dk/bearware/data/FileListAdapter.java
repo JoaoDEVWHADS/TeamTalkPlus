@@ -11,6 +11,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Build;
+import androidx.core.view.ViewCompat;
 import android.os.Environment;
 import android.text.format.Formatter;
 import android.util.SparseArray;
@@ -213,74 +214,67 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
     public View getView(int position, View convertView, ViewGroup parent) {
         final RemoteFile remoteFile = remoteFiles.get(position);
         View.OnClickListener buttonClickListener = v -> {
-            switch (v.getId()) {
-            case R.id.cancel_btn: {
+            if (v.getId() == R.id.cancel_btn) {
+                {
                 FileTransfer transfer = downloads.get(remoteFile.szFileName);
                 if (ttClient.cancelFileTransfer(transfer.nTransferID)) {
-                    downloadCancellationCleanup(transfer);
-                    notifyDataSetChanged();
+                downloadCancellationCleanup(transfer);
+                notifyDataSetChanged();
                 }
-                break;
-            }
-            case R.id.download_btn: {
+                }
+            } else if (v.getId() == R.id.download_btn) {
+                {
                 if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) || Permissions.WRITE_EXTERNAL_STORAGE.request(activity)) {
-                    File dlPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                    if (dlPath.mkdirs() || dlPath.isDirectory()) {
-                        final File localFile = new File(dlPath, remoteFile.szFileName);
-                        if (localFile.exists()) {
-                            AlertDialog.Builder alert = new AlertDialog.Builder(context);
-                            alert.setMessage(context.getString(R.string.alert_file_override, localFile.getAbsolutePath()));
-                            alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) -> {
-                                if (localFile.delete()) {
-                                    startDownload(remoteFile, localFile);
-                                }
-                                else {
-                                    Toast.makeText(context,
-                                                   context.getString(R.string.err_file_delete,
-                                                                     localFile.getAbsolutePath()),
-                                                   Toast.LENGTH_LONG).show();
-                                }
-                            });
-
-                            alert.setNegativeButton(android.R.string.no, null);
-                            alert.show();
-                        }
-
-                        else {
-                            startDownload(remoteFile, localFile);
-                        }
-                    }
-
-                    else {
-                        Toast.makeText(context,
-                                       context.getString(R.string.err_download_path,
-                                                         dlPath.getAbsolutePath()),
-                                       Toast.LENGTH_LONG).show();
-                    }
+                File dlPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (dlPath.mkdirs() || dlPath.isDirectory()) {
+                final File localFile = new File(dlPath, remoteFile.szFileName);
+                if (localFile.exists()) {
+                AlertDialog.Builder alert = new AlertDialog.Builder(context);
+                alert.setMessage(context.getString(R.string.alert_file_override, localFile.getAbsolutePath()));
+                alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) -> {
+                if (localFile.delete()) {
+                startDownload(remoteFile, localFile);
                 }
-                break;
-            }
-            case R.id.remove_btn: {
+                else {
+                Toast.makeText(context,
+                context.getString(R.string.err_file_delete,
+                localFile.getAbsolutePath()),
+                Toast.LENGTH_LONG).show();
+                }
+                });
+                alert.setNegativeButton(android.R.string.no, null);
+                alert.show();
+                }
+                else {
+                startDownload(remoteFile, localFile);
+                }
+                }
+                else {
+                Toast.makeText(context,
+                context.getString(R.string.err_download_path,
+                dlPath.getAbsolutePath()),
+                Toast.LENGTH_LONG).show();
+                }
+                }
+                }
+            } else if (v.getId() == R.id.remove_btn) {
+                {
                 AlertDialog.Builder alert = new AlertDialog.Builder(context);
                 alert.setMessage(context.getString(R.string.remote_file_remove_confirmation, remoteFile.szFileName));
                 alert.setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
-
-                        @Override
-                        public void onClick(DialogInterface dialog, int whichButton) {
-                            if (ttClient.doDeleteFile(chanId, remoteFile.nFileID) <= 0)
-                                Toast.makeText(context,
-                                               context.getString(R.string.err_file_delete,
-                                                                 remoteFile.szFileName),
-                                               Toast.LENGTH_LONG).show();
-                        }
-                    });
-
+                @Override
+                public void onClick(DialogInterface dialog, int whichButton) {
+                if (ttClient.doDeleteFile(chanId, remoteFile.nFileID) <= 0)
+                Toast.makeText(context,
+                context.getString(R.string.err_file_delete,
+                remoteFile.szFileName),
+                Toast.LENGTH_LONG).show();
+                }
+                });
                 alert.setNegativeButton(android.R.string.no, null);
                 alert.show();
-                break;
-            }
-            default:
-                break;
+                }
+            } else {
             }
         };
 
@@ -294,9 +288,9 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
             Button downloadButton = convertView.findViewById(R.id.download_btn);
             Button removeButton = convertView.findViewById(R.id.remove_btn);
             downloadButton.setOnClickListener(buttonClickListener);
-            downloadButton.setAccessibilityDelegate(accessibilityAssistant);
+            ViewCompat.setAccessibilityDelegate(downloadButton, accessibilityAssistant);
             removeButton.setOnClickListener(buttonClickListener);
-            removeButton.setAccessibilityDelegate(accessibilityAssistant);
+            ViewCompat.setAccessibilityDelegate(removeButton, accessibilityAssistant);
             break;
         }
         case FILE_TRANSFER_VIEW_TYPE: {
@@ -306,14 +300,14 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
             ((TextView)convertView.findViewById(R.id.progress)).setText(context.getString(R.string.download_progress, getPercentage(transferinfo)));
             Button cancelButton = convertView.findViewById(R.id.cancel_btn);
             cancelButton.setOnClickListener(buttonClickListener);
-            cancelButton.setAccessibilityDelegate(accessibilityAssistant);
+            ViewCompat.setAccessibilityDelegate(cancelButton, accessibilityAssistant);
             break;
         }
         default:
             break;
         }
         ((TextView)convertView.findViewById(R.id.filename)).setText(remoteFile.szFileName);
-        convertView.setAccessibilityDelegate(accessibilityAssistant);
+        ViewCompat.setAccessibilityDelegate(convertView, accessibilityAssistant);
         return convertView;
     }
 

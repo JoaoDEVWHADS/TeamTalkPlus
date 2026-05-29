@@ -57,11 +57,11 @@ public class MoveUsersActivity extends AppCompatActivity implements TeamTalkConn
 
     private UserAdapter userAdapter;
 
-    @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
-    }
 
+    @Override
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -117,8 +117,18 @@ public class MoveUsersActivity extends AppCompatActivity implements TeamTalkConn
             }
         });
 
+        radioPickChannel.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                selectedUserIds.clear();
+                if (selectedSourceChannelId == -1) {
+                    showSourceChannelPicker();
+                } else {
+                    refreshData();
+                }
+            }
+        });
+
         radioPickChannel.setOnClickListener(v -> {
-            selectedUserIds.clear();
             showSourceChannelPicker();
         });
 
@@ -136,120 +146,26 @@ public class MoveUsersActivity extends AppCompatActivity implements TeamTalkConn
     }
 
     private void showSourceChannelPicker() {
-        currentViewId = 0;
-        selectedTargetId = 0;
+        currentViewId = ttConnection.getService().getTTInstance().getMyChannelID();
+        selectedTargetId = currentViewId;
         showChannelPicker(R.string.dialog_select_source_channel, true);
     }
 
     
     private void showChannelPicker(final int titleResId, final boolean isSource) {
         if (ttConnection.getService() == null) return;
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
-        Map<Integer, Channel> channels = ttConnection.getService().getChannels();
-        
-        
-        if (!channels.containsKey(currentViewId)) currentViewId = 0;
-        
-        
-        Channel currentViewChannel = channels.get(currentViewId);
-        String currentViewName = "?";
-        if (currentViewChannel != null) {
-            currentViewName = (currentViewChannel.nChannelID == 0) ? getString(R.string.init_channel) : currentViewChannel.szName;
-        }
-        
-        
-        Channel targetChannel = channels.get(selectedTargetId);
-        final String targetName;
-        if (targetChannel != null) {
-            targetName = (targetChannel.nChannelID == 0) ? getString(R.string.init_channel) : targetChannel.szName;
-        } else {
-            targetName = "?";
-        }
-
-        builder.setTitle(getString(R.string.current_channel_prefix) + currentViewName);
-
-        List<String> items = new ArrayList<>();
-        List<Integer> itemChannelIds = new ArrayList<>(); 
-
-        
-        boolean canGoUp = (currentViewId != 0);
-        if (canGoUp) {
-            items.add(".. (" + getString(R.string.action_leave) + ")");
-            itemChannelIds.add(-1); 
-        }
-
-        
-        List<Channel> children = new ArrayList<>();
-        for (Channel c : channels.values()) {
-            if (c.nParentID == currentViewId && c.nChannelID != 0) {
-                children.add(c);
-            }
-        }
-        
-        if (currentViewId == 0) {
-            Channel root = channels.get(0);
-            if (root != null) {
-                
-                String check = (selectedTargetId == 0) ? " [X]" : "";
-                int count = 0;
-                for (User u : ttConnection.getService().getUsers().values()) if (u.nChannelID == 0) count++;
-                items.add(getString(R.string.init_channel) + " (" + count + ")" + check);
-                itemChannelIds.add(0);
-            }
-        }
-
-        Collections.sort(children, (c1, c2) -> c1.szName.compareToIgnoreCase(c2.szName));
-
-        for (Channel c : children) {
-            String check = (selectedTargetId == c.nChannelID) ? " [X]" : "";
-            int count = 0;
-            for (User u : ttConnection.getService().getUsers().values()) if (u.nChannelID == c.nChannelID) count++;
-            
-            items.add(c.szName + " (" + count + ")" + check);
-            itemChannelIds.add(c.nChannelID);
-        }
-
-        builder.setItems(items.toArray(new String[0]), (dialog, which) -> {
-            int clickedId = itemChannelIds.get(which);
-            
-            if (clickedId == -1) {
-                
-                if (currentViewChannel != null && currentViewChannel.nParentID >= 0) {
-                    currentViewId = currentViewChannel.nParentID;
-                } else {
-                    currentViewId = 0;
-                }
-                showChannelPicker(titleResId, isSource);
+        Utils.showChannelPicker(this, ttConnection.getService(), titleResId, currentViewId, selectedTargetId, (channelId, channelName) -> {
+            selectedTargetId = channelId;
+            currentViewId = channelId;
+            if (isSource) {
+                selectedSourceChannelId = selectedTargetId;
+                tvSourceChannel.setText(getString(R.string.fmt_label_value, getString(R.string.current_channel_prefix), channelName));
+                refreshData();
             } else {
-                
-                selectedTargetId = clickedId;
-                
-                
-                currentViewId = clickedId;
-                showChannelPicker(titleResId, isSource);
+                performMove(selectedTargetId);
             }
         });
-
-        
-        String actionLabel = isSource ? getString(R.string.action_select) : getString(R.string.action_move);
-        builder.setPositiveButton(actionLabel + ": " + targetName, (dialog, which) -> {
-             if (isSource) {
-                 selectedSourceChannelId = selectedTargetId;
-                 tvSourceChannel.setText(getString(R.string.current_channel_prefix) + targetName);
-                 refreshData();
-             } else {
-                 performMove(selectedTargetId);
-             }
-        });
-
-        builder.setNegativeButton(android.R.string.cancel, (dialog, which) -> {
-            if(isSource && selectedSourceChannelId == -1) {
-                radioServer.setChecked(true);
-            }
-        });
-
-        builder.show();
     }
 
     @Override
@@ -350,8 +266,8 @@ public class MoveUsersActivity extends AppCompatActivity implements TeamTalkConn
             Toast.makeText(this, R.string.err_no_users_selected, Toast.LENGTH_SHORT).show();
             return;
         }
-        currentViewId = 0;
-        selectedTargetId = 0;
+        currentViewId = ttConnection.getService().getTTInstance().getMyChannelID();
+        selectedTargetId = currentViewId;
         showChannelPicker(R.string.title_select_destination, false);
     }
 

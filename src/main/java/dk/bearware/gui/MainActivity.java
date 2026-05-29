@@ -8,10 +8,16 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
+import android.content.res.AssetFileDescriptor;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -20,19 +26,25 @@ import android.hardware.SensorManager;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
-import android.media.SoundPool;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.os.Environment;
+import android.provider.Settings;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 import android.os.Vibrator;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseArray;
+import android.os.Build;
+import androidx.activity.OnBackPressedCallback;
 import android.util.SparseIntArray;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -42,16 +54,20 @@ import android.view.View;
 import android.view.KeyEvent;
 import android.view.inputmethod.EditorInfo;
 import android.view.View.OnClickListener;
+import dk.bearware.data.AppInfo;
 import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.view.accessibility.AccessibilityEvent;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AdapterView.OnItemLongClickListener;
 import android.widget.BaseAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ExpandableListView;
 import android.widget.ImageButton;
@@ -60,6 +76,7 @@ import android.widget.ListView;
 import android.widget.PopupMenu;
 import android.widget.PopupMenu.OnMenuItemClickListener;
 import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -67,13 +84,21 @@ import androidx.annotation.NonNull;
 import androidx.annotation.OptIn;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
 import androidx.core.app.NotificationCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.AccessibilityDelegateCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentStatePagerAdapter;
 import androidx.fragment.app.ListFragment;
 import androidx.viewpager.widget.ViewPager;
 
+import androidx.appcompat.widget.SwitchCompat;
 import com.google.android.material.tabs.TabLayout;
 
 import java.io.File;
@@ -86,6 +111,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Vector;
 
@@ -96,6 +123,10 @@ import dk.bearware.RemoteFile;
 import dk.bearware.ServerProperties;
 import dk.bearware.SoundDeviceConstants;
 import dk.bearware.SoundLevel;
+import dk.bearware.TeamTalk5;
+import dk.bearware.data.License;
+import dk.bearware.BanType;
+import dk.bearware.StreamType;
 import dk.bearware.Subscription;
 import dk.bearware.TeamTalkBase;
 import dk.bearware.TextMessage;
@@ -122,7 +153,7 @@ import dk.bearware.events.ClientEventListener;
 import dk.bearware.utils.PrefsHelper;
 
 public class MainActivity
-extends AppCompatActivity
+        extends AppCompatActivity
         implements TeamTalkConnectionListener,
         OnItemClickListener,
         OnItemLongClickListener,
@@ -146,36 +177,75 @@ extends AppCompatActivity
         ClientEventListener.OnCmdFileRemoveListener,
         ClientEventListener.OnUserStateChangeListener,
         ClientEventListener.OnVoiceActivationListener,
-        ClientEventListener.OnCmdFileNewListener {
+        ClientEventListener.OnCmdFileNewListener,
+        AccessibilityAssistant.OnAccessibilityActionClickListener {
 
     private static final int MIC_INPUT_DEFAULT = 0;
     private static final int MIC_INPUT_INTERNAL = 1;
     private static final int MIC_INPUT_EXTERNAL = 2;
     private int currentMicInput = MIC_INPUT_DEFAULT;
-    
+
     private ImageButton micInputButton;
     private BroadcastReceiver headsetReceiver;
 
-
+    private int lastPos = -1;
     SectionsPagerAdapter mSectionsPagerAdapter;
 
-    ViewPager mViewPager;
+    CustomViewPager mViewPager;
     TabLayout mTabLayout;
 
     public static final String TAG = "bearware";
 
-    private static final String MSG_NOTIFICATION_CHANNEL_ID = "TT_PM";
+    private static final String MESSAGE_NOTIFICATION_TAG = "incoming_message";
+    private static final String MSG_NOTIFICATION_CHANNEL_ID = "dk.bearware.gui.MSG_CHANNEL";
+
+    public final int SOUND_VOICETXON = 1,
+            SOUND_VOICETXOFF = 2,
+            SOUND_USERMSG = 3,
+            SOUND_CHANMSG = 4,
+            SOUND_BCASTMSG = 5,
+            SOUND_SERVERLOST = 6,
+            SOUND_FILESUPDATE = 7,
+            SOUND_VOXENABLE = 8,
+            SOUND_VOXDISABLE = 9,
+            SOUND_VOXON = 10,
+            SOUND_VOXOFF = 11,
+            SOUND_TXREADY = 12,
+            SOUND_TXSTOP = 13,
+            SOUND_USERJOIN = 14,
+            SOUND_USERLEFT = 15,
+            SOUND_USERLOGGEDIN = 16,
+            SOUND_USERLOGGEDOFF = 17,
+            SOUND_INTERCEPTON = 18,
+            SOUND_INTERCEPTOFF = 19,
+            SOUND_CHANMSGSENT = 20,
+            SOUND_MUTEALL = 21,
+            SOUND_UNMUTEALL = 22,
+            SOUND_USERMSGSENT = 23,
+            SOUND_TYPING = 24;
 
     public final int REQUEST_EDITCHANNEL = 1,
-                     REQUEST_NEWCHANNEL = 2,
-                     REQUEST_EDITUSER = 3,
-                     REQUEST_SELECT_FILE = 4;
+            REQUEST_NEWCHANNEL = 2,
+            REQUEST_EDITUSER = 3,
+            REQUEST_SELECT_FILE = 4,
+            REQUEST_SETTINGS = 5;
 
     TeamTalkConnection mConnection;
 
     Channel curchannel;
 
     Channel mychannel;
+
+    /**
+     * True during the very first channel join right after login. The 200ms handler
+     * in onCmdMyselfLoggedIn already fires the join TTS, so we skip it in
+     * onCmdUserJoinedChannel to avoid duplicates. Cleared after the first join.
+     */
+    private boolean isFirstJoinAfterLogin = false;
+
+    private ExpandableListView mediaListView;
+    private ListView listChannels;
+    private dk.bearware.UserAccount myUserAccount = new dk.bearware.UserAccount();
 
     SparseArray<CmdComplete> activecmds = new SparseArray<>();
 
@@ -189,9 +259,8 @@ extends AppCompatActivity
     TTSWrapper ttsWrapper = null;
     AccessibilityAssistant accessibilityAssistant;
     AudioManager audioManager;
-    SoundPool audioIcons;
     NotificationManager notificationManager;
-    WakeLock wakeLock, proximityWakeLock;
+    PowerManager.WakeLock wakeLock, proximityWakeLock;
     boolean restarting;
     SensorManager mSensorManager;
     Sensor mSensor;
@@ -199,35 +268,14 @@ extends AppCompatActivity
     Map<Integer, User> users = new HashMap<>();
     Map<Integer, Integer> prevChannels = new HashMap<>();
     java.util.Set<Integer> userIdsWithMessages = new java.util.TreeSet<>();
-
-    static final String MESSAGE_NOTIFICATION_TAG = "incoming_message";
-
-    final int SOUND_VOICETXON = 1,
-              SOUND_VOICETXOFF = 2,
-              SOUND_USERMSG = 3,
-              SOUND_CHANMSG = 4,
-              SOUND_BCASTMSG = 5,
-              SOUND_SERVERLOST = 6,
-              SOUND_FILESUPDATE = 7,
-              SOUND_VOXENABLE = 8,
-              SOUND_VOXDISABLE = 9,
-              SOUND_VOXON = 10,
-              SOUND_VOXOFF = 11,
-              SOUND_TXREADY = 12,
-              SOUND_TXSTOP = 13,
-              SOUND_USERJOIN = 14,
-              SOUND_USERLEFT = 15,
-              SOUND_USERLOGGEDIN = 16,
-              SOUND_USERLOGGEDOFF = 17,
-              SOUND_INTERCEPTON = 18,
-              SOUND_INTERCEPTOFF = 19,
-              SOUND_CHANMSGSENT = 20,
-              SOUND_MUTEALL = 21,
-              SOUND_UNMUTEALL = 22;
-    
-    private Map<Integer, String> soundFilenames = new HashMap<>();
-
-    SparseIntArray sounds = new SparseIntArray();
+    private Set<Integer> recentLogins = new HashSet<>();
+    private Set<Integer> loginsSoundPlayed = new HashSet<>();
+    private Map<Integer, Runnable> pendingLeaveSounds = new HashMap<>();
+    private Map<Integer, Runnable> pendingTTSLeaveRunnables = new HashMap<>();
+    private Map<Integer, String> pendingTTSLeaveChanNames = new HashMap<>();
+    private Runnable pendingMyselfLeftChanTTS = null;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private ExecutorService soundExecutor;
 
     private Context ctx;
     private PrefsHelper prefs;
@@ -248,6 +296,47 @@ extends AppCompatActivity
         return mediaAdapter;
     }
 
+    private static MainActivity instance;
+    private android.content.SharedPreferences.OnSharedPreferenceChangeListener prefListener;
+
+    public static void playPrivateMessageSentSound(String message) {
+        if (instance != null) {
+            instance.playSound(instance.SOUND_USERMSGSENT);
+            if (instance.prefs.get("private_message_sent_checkbox", true)) {
+                String ttsMsg = instance.getString(R.string.text_tts_private_message_sent, message);
+                instance.speakAndLog(ttsMsg, MyTextMessage.MSGTYPE_LOG_INFO);
+            }
+        }
+    }
+
+    public static void playChannelMessageSentSound() {
+        if (instance != null) {
+            instance.playSound(instance.SOUND_CHANMSGSENT);
+            // TTS for channel message sent is usually handled in onCmdTextMessage echo
+        }
+    }
+    private void initSoundFilenames() {
+        // Obsolete in MainActivity as sounds moved to Service, 
+        // but kept empty to avoid compilation errors if called elsewhere in this file.
+        // Actually, some parts still call it.
+    }
+
+    private void playSound(int soundEvent) {
+        if (getService() != null) {
+            getService().playSound(soundEvent);
+        }
+    }
+
+    private void speakAndLog(String ttsMsg, int logType) {
+        if (ttsWrapper != null) {
+            ttsWrapper.speak(ttsMsg);
+        }
+        if (getService() != null) {
+            MyTextMessage msg = MyTextMessage.createLogMsg(logType, ttsMsg);
+            getService().getChatLogTextMsgs().add(msg);
+        }
+    }
+
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(LocaleHelper.onAttach(base));
@@ -256,7 +345,14 @@ extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
+        instance = this;
+        prefs = new PrefsHelper(this);
+
+        prefListener = (sharedPreferences, key) -> {
+            // preferences changes handled here if needed
+        };
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(prefListener);
+
         final Thread.UncaughtExceptionHandler defaultHandler = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
             Log.e("bearware", "FATAL EXCEPTION IN MAIN ACTIVITY", e);
@@ -268,8 +364,12 @@ extends AppCompatActivity
         // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         initSoundFilenames(); // Initialize sound filenames map
-        ctx = getApplicationContext();
-        prefs = new PrefsHelper(ctx);
+        // Use 'this' instead of getApplicationContext() to ensure the Activity's updated 
+        // resources (from attachBaseContext) are used for localized strings.
+        ctx = this;
+        TeamTalk5.setLicenseInformation(License.REGISTRATION_NAME, License.REGISTRATION_KEY);
+
+        soundExecutor = Executors.newSingleThreadExecutor();
 
         mConnection = new TeamTalkConnection(this);
         setContentView(R.layout.activity_main);
@@ -286,10 +386,13 @@ extends AppCompatActivity
         mSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
         restarting = (savedInstanceState != null);
         accessibilityAssistant = new AccessibilityAssistant(this);
+        accessibilityAssistant.setOnAccessibilityActionClickListener(this);
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        wakeLock = ((PowerManager)getSystemService(Context.POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG + ":TeamTalk5");
-        proximityWakeLock = ((PowerManager)getSystemService(Context.POWER_SERVICE)).newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, TAG + ":TeamTalk5");
+        wakeLock = ((PowerManager) getSystemService(Context.POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                TAG + ":TeamTalk5");
+        proximityWakeLock = ((PowerManager) getSystemService(Context.POWER_SERVICE))
+                .newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, TAG + ":TeamTalk5");
         wakeLock.setReferenceCounted(false);
         proximityWakeLock.setReferenceCounted(false);
 
@@ -301,7 +404,7 @@ extends AppCompatActivity
         globalChatAdapter = new TextMessageAdapter(this, accessibilityAssistant);
         globalChatAdapter.setFilterMsgType(TextMsgType.MSGTYPE_BROADCAST);
         eventHistoryAdapter = new TextMessageAdapter(this, accessibilityAssistant);
-        
+
         java.util.Set<Integer> excludedTypes = new java.util.HashSet<>();
         excludedTypes.add(TextMsgType.MSGTYPE_CHANNEL);
         excludedTypes.add(TextMsgType.MSGTYPE_BROADCAST);
@@ -310,18 +413,27 @@ extends AppCompatActivity
         privateConversationsAdapter = new PrivateConversationsAdapter(this);
         mediaAdapter = new MediaAdapter(this.getBaseContext());
 
-        mSectionsPagerAdapter = new SectionsPagerAdapter(getSupportFragmentManager());
-        mTabLayout = findViewById(R.id.tab_layout);
-
         mViewPager = findViewById(R.id.pager);
+        mTabLayout = findViewById(R.id.tab_layout);
+        mSectionsPagerAdapter = new SectionsPagerAdapter(getSupportFragmentManager());
+
         mViewPager.setAdapter(mSectionsPagerAdapter);
         mViewPager.addOnPageChangeListener(mSectionsPagerAdapter);
         mTabLayout.setupWithViewPager(mViewPager);
+        
+    // Initial restricted positions
+    updateSwipeRestrictions();
+    if (savedInstanceState != null) {
+        boolean expanded = savedInstanceState.getBoolean("tabs_expanded", false);
+        mSectionsPagerAdapter.updateTabs(expanded);
+    }
+    if (savedInstanceState == null) {
         mViewPager.setCurrentItem(mSectionsPagerAdapter.getPositionForId(SectionsPagerAdapter.CHANNELS_PAGE));
+    }
 
         initSoundFilenames();
         setupButtons();
-        
+
         micInputButton = findViewById(R.id.mic_input_switch);
         micInputButton.setOnClickListener(v -> showMicInputSelectionDialog());
 
@@ -331,11 +443,11 @@ extends AppCompatActivity
                 if (Intent.ACTION_HEADSET_PLUG.equals(intent.getAction())) {
                     int state = intent.getIntExtra("state", -1);
                     if (state == 1) {
-                         micInputButton.setVisibility(View.VISIBLE);
+                        micInputButton.setVisibility(View.VISIBLE);
                     } else {
-                         micInputButton.setVisibility(View.GONE);
-                         // Revert to default if headset unplugged
-                         setAudioInputDevice(MIC_INPUT_DEFAULT); 
+                        micInputButton.setVisibility(View.GONE);
+                        // Revert to default if headset unplugged
+                        setAudioInputDevice(MIC_INPUT_DEFAULT);
                     }
                 }
             }
@@ -347,6 +459,29 @@ extends AppCompatActivity
             mMediaPlayer.setOnCompletionListener(mediaPlayer -> mMediaPlayer.release());
             mMediaPlayer.start();
         }
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (Build.MANUFACTURER.equalsIgnoreCase("Samsung")) {
+                    int channelsPageIndex = mSectionsPagerAdapter.getPositionForId(SectionsPagerAdapter.CHANNELS_PAGE);
+                    if (channelsPageIndex != -1 && mViewPager.getCurrentItem() != channelsPageIndex) {
+                        mViewPager.setCurrentItem(channelsPageIndex);
+                    } else {
+                        if (getService() != null) {
+                            getService().disconnect();
+                        }
+                        setEnabled(false);
+                        onBackPressed();
+                        setEnabled(true);
+                    }
+                } else {
+                    setEnabled(false);
+                    onBackPressed();
+                    setEnabled(true);
+                }
+            }
+        });
     }
 
     @Override
@@ -363,36 +498,58 @@ extends AppCompatActivity
 
         int currentPage = mSectionsPagerAdapter.getIdForPosition(mViewPager.getCurrentItem());
 
-        boolean uploadRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_UPLOAD_FILES) != UserRight.USERRIGHT_NONE;
+        boolean uploadRight = (myuseraccount.uUserRights
+                & UserRight.USERRIGHT_UPLOAD_FILES) != UserRight.USERRIGHT_NONE;
         boolean isEditable = curchannel != null;
-        boolean isJoinable = curchannel != null && getClient().getMyChannelID() != curchannel.nChannelID && curchannel.nMaxUsers > 0;
+        boolean isJoinable = curchannel != null && getClient().getMyChannelID() != curchannel.nChannelID;
         boolean isLeaveable = getClient().getMyChannelID() > 0;
         boolean isMyChannel = curchannel != null && getClient().getMyChannelID() == curchannel.nChannelID;
 
         boolean inChannelsTab = currentPage == SectionsPagerAdapter.CHANNELS_PAGE;
-        
+
         boolean isOperator = false;
         if (curchannel != null && getClient().isChannelOperator(getClient().getMyUserID(), curchannel.nChannelID)) {
-             isOperator = true;
+            isOperator = true;
         }
 
         boolean canBan = (myuseraccount.uUserRights & UserRight.USERRIGHT_BAN_USERS) != UserRight.USERRIGHT_NONE;
         boolean canMove = (myuseraccount.uUserRights & UserRight.USERRIGHT_MOVE_USERS) != UserRight.USERRIGHT_NONE;
-        boolean canCreateChannel = (myuseraccount.uUserRights & UserRight.USERRIGHT_MODIFY_CHANNELS) != UserRight.USERRIGHT_NONE ||
-                                   (myuseraccount.uUserRights & UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL) != UserRight.USERRIGHT_NONE;
-        
+        boolean canCreateChannel = (myuseraccount.uUserRights
+                & UserRight.USERRIGHT_MODIFY_CHANNELS) != UserRight.USERRIGHT_NONE ||
+                (myuseraccount.uUserRights & UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL) != UserRight.USERRIGHT_NONE;
+
+        boolean showLeave = isLeaveable
+                && (curchannel == null || curchannel.nChannelID == getClient().getMyChannelID());
         menu.findItem(R.id.action_edit).setEnabled(isEditable).setVisible(isEditable && inChannelsTab);
         menu.findItem(R.id.action_join).setEnabled(isJoinable).setVisible(isJoinable && inChannelsTab);
-        menu.findItem(R.id.action_leave).setEnabled(isLeaveable).setVisible(isLeaveable && inChannelsTab);
-        menu.findItem(R.id.action_move).setEnabled(canMove && isLeaveable).setVisible(canMove && isLeaveable && inChannelsTab && curchannel != null);
-        menu.findItem(R.id.action_banned_users).setEnabled((isOperator || canBan) && isLeaveable).setVisible((isOperator || canBan) && isLeaveable && inChannelsTab && curchannel != null);
+        MenuItem leaveItem = menu.findItem(R.id.action_leave);
+        leaveItem.setEnabled(isLeaveable).setVisible(showLeave && inChannelsTab);
+        if (curchannel == null && isLeaveable) {
+            leaveItem.setTitle(R.string.action_stay_server);
+        } else {
+            leaveItem.setTitle(R.string.action_leave);
+        }
+        menu.findItem(R.id.action_move).setEnabled(canMove && isLeaveable)
+                .setVisible(canMove && isLeaveable && inChannelsTab && curchannel != null);
+        menu.findItem(R.id.action_banned_users).setEnabled((isOperator || canBan) && isLeaveable)
+                .setVisible((isOperator || canBan) && isLeaveable && inChannelsTab && curchannel != null);
         menu.findItem(R.id.action_newchannel).setVisible(canCreateChannel && inChannelsTab && curchannel != null);
 
         boolean inFilesTab = currentPage == SectionsPagerAdapter.FILES_PAGE;
         menu.findItem(R.id.action_upload).setEnabled(uploadRight).setVisible(uploadRight && inFilesTab);
 
         boolean inMediaTab = currentPage == SectionsPagerAdapter.MEDIA_PAGE;
-        menu.findItem(R.id.action_stream).setEnabled(isMyChannel).setVisible(isMyChannel && inMediaTab);
+        MenuItem streamItem = menu.findItem(R.id.action_stream);
+        streamItem.setEnabled(isMyChannel).setVisible(isMyChannel && inMediaTab);
+
+        int flags = getClient().getFlags();
+        boolean isStreaming = (flags & ClientFlag.CLIENT_STREAM_AUDIO) == ClientFlag.CLIENT_STREAM_AUDIO
+                || (flags & ClientFlag.CLIENT_STREAM_VIDEO) == ClientFlag.CLIENT_STREAM_VIDEO;
+        if (isStreaming) {
+            streamItem.setTitle(R.string.action_stop_stream);
+        } else {
+            streamItem.setTitle(R.string.action_stream);
+        }
 
         return super.onPrepareOptionsMenu(menu);
     }
@@ -400,100 +557,85 @@ extends AppCompatActivity
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         AlertDialog.Builder alert = new AlertDialog.Builder(this);
-        switch(item.getItemId()) {
-            case R.id.action_join : {
+        if (item.getItemId() == R.id.action_join) {
+            {
                 if (curchannel != null)
                     joinChannel(curchannel);
             }
-            break;
-            case R.id.action_leave : {
-                    leaveChannel();
+        } else if (item.getItemId() == R.id.action_leave) {
+            {
+                leaveChannel();
             }
-            break;
-            case R.id.action_move : {
+        } else if (item.getItemId() == R.id.action_move) {
+            {
                 Intent intent = new Intent(this, dk.bearware.gui.MoveUsersActivity.class);
                 startActivity(intent);
             }
-            break;
-            case R.id.action_banned_users : {
+        } else if (item.getItemId() == R.id.action_banned_users) {
+            {
                 Intent intent = new Intent(this, dk.bearware.gui.ChannelBannedUsersActivity.class);
                 if (curchannel != null) {
                     intent.putExtra("channel_id", curchannel.nChannelID);
                 }
                 startActivity(intent);
             }
-            break;
-            case R.id.action_upload : {
-                if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ?
-                    requestMediaPermissions() :
-                    Permissions.READ_EXTERNAL_STORAGE.request(this)) {
+        } else if (item.getItemId() == R.id.action_upload) {
+            {
+                if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ? requestMediaPermissions()
+                        : Permissions.READ_EXTERNAL_STORAGE.request(this)) {
                     fileSelectionStart();
                 }
             }
-            break;
-            case R.id.action_stream : {
+        } else if (item.getItemId() == R.id.action_stream) {
+            {
                 int flags = getClient().getFlags();
-                if ((flags & ClientFlag.CLIENT_STREAM_AUDIO) == ClientFlag.CLIENT_STREAM_AUDIO || (flags & ClientFlag.CLIENT_STREAM_VIDEO) == ClientFlag.CLIENT_STREAM_VIDEO) {
-                    getClient().stopStreamingMediaFileToChannel();
+                if ((flags & ClientFlag.CLIENT_STREAM_AUDIO) == ClientFlag.CLIENT_STREAM_AUDIO
+                        || (flags & ClientFlag.CLIENT_STREAM_VIDEO) == ClientFlag.CLIENT_STREAM_VIDEO) {
+                    getService().stopStreamingMediaFile();
                 } else {
                     Intent intent = new Intent(MainActivity.this, StreamMediaActivity.class);
                     startActivity(intent);
                 }
             }
-            break;
-            case R.id.action_edit : {
+        } else if (item.getItemId() == R.id.action_edit) {
+            {
                 if (curchannel != null)
                     editChannelProperties(curchannel);
             }
-            break;
-
-            case R.id.action_newchannel : {
+        } else if (item.getItemId() == R.id.action_newchannel) {
+            {
                 Intent intent = new Intent(MainActivity.this, ChannelPropActivity.class);
-
                 int parent_chan_id = getClient().getRootChannelID();
-                if(curchannel != null)
+                if (curchannel != null)
                     parent_chan_id = curchannel.nChannelID;
                 intent = intent.putExtra(ChannelPropActivity.EXTRA_PARENTID, parent_chan_id);
-
                 startActivityForResult(intent, REQUEST_NEWCHANNEL);
             }
-            break;
-            /*
-            case R.id.action_settings : {
-                Intent intent = new Intent(MainActivity.this, PreferencesActivity.class);
-                startActivity(intent);
-                break;
-            }
-            */
-            case android.R.id.home : {
-                int currentPage = mSectionsPagerAdapter.getIdForPosition(mViewPager.getCurrentItem());
-                Channel parentChannel = ((currentPage == SectionsPagerAdapter.CHANNELS_PAGE)
-                                         && (curchannel != null)
-                                         ) ?
-                    getService().getChannels().get(curchannel.nParentID) :
-                    null;
-                if (currentPage != SectionsPagerAdapter.CHANNELS_PAGE) {
-                    mViewPager.setCurrentItem(mSectionsPagerAdapter.getPositionForId(SectionsPagerAdapter.CHANNELS_PAGE));
-                } else if ((curchannel != null)) {
-                    setCurrentChannel(parentChannel);
-                    channelsAdapter.notifyDataSetChanged();
-                }
-                else if (filesAdapter.getActiveTransfersCount() > 0) {
-                    alert.setMessage(R.string.disconnect_alert);
-                    alert.setPositiveButton(android.R.string.ok, (dialog, whichButton) -> {
-                        filesAdapter.cancelAllTransfers();
-                        finish();
-                    });
-                    alert.setNegativeButton(android.R.string.cancel, null);
-                    alert.show();
-                }
-                else {
+        } else if (item.getItemId() == android.R.id.home) {
+            int currentPage = mSectionsPagerAdapter.getIdForPosition(mViewPager.getCurrentItem());
+            Channel parentChannel = ((currentPage == SectionsPagerAdapter.CHANNELS_PAGE)
+                    && (curchannel != null)) ? getService().getChannels().get(curchannel.nParentID) : null;
+            if (currentPage != SectionsPagerAdapter.CHANNELS_PAGE) {
+                mViewPager.setCurrentItem(mSectionsPagerAdapter.getPositionForId(SectionsPagerAdapter.CHANNELS_PAGE));
+            } else if (curchannel != null) {
+                setCurrentChannel(parentChannel);
+                channelsAdapter.notifyDataSetChanged();
+            } else if (filesAdapter != null && filesAdapter.getActiveTransfersCount() > 0) {
+                alert.setMessage(R.string.disconnect_alert);
+                alert.setPositiveButton(android.R.string.ok, (dialog, whichButton) -> {
+                    filesAdapter.cancelAllTransfers();
+                    if (getService() != null) {
+                        getService().disconnect();
+                    }
                     finish();
-                }
-                break;
+                });
+                alert.setNegativeButton(android.R.string.cancel, null);
+                alert.show();
+            } else {
+                Log.d(TAG, "Home button pressed at root, ignoring focus exit");
             }
-            default :
-                return super.onOptionsItemSelected(item);
+        } else {
+            return super.onOptionsItemSelected(item);
         }
         return true;
     }
@@ -501,26 +643,28 @@ extends AppCompatActivity
     @Override
     protected void onStart() {
         super.onStart();
-        if (ttsWrapper == null)
-            ttsWrapper = new TTSWrapper(this, prefs.get("pref_speech_engine", TTSWrapper.defaultEngineName));
-
         if (!mConnection.isBound()) {
 
             Intent intent = new Intent(ctx, TeamTalkService.class);
             Log.d(TAG, "Connecting to TeamTalk service");
-            if(!bindService(intent, mConnection, Context.BIND_AUTO_CREATE))
+            startService(intent); // explicitly start service
+            if (!bindService(intent, mConnection, Context.BIND_AUTO_CREATE))
                 Log.e(TAG, "Failed to connect to TeamTalk service");
-        }
-        else {
+        } else {
             adjustSoundSystem();
             if (prefs.get(Preferences.PREF_SOUNDSYSTEM_BLUETOOTH_HEADSET, false)) {
                 if (Permissions.BLUETOOTH.request(this))
                     getService().watchBluetoothHeadset();
-            }
-            else getService().unwatchBluetoothHeadset();
+            } else
+                getService().unwatchBluetoothHeadset();
 
             int mastervol = prefs.get(Preferences.PREF_SOUNDSYSTEM_MASTERVOLUME, SoundLevel.SOUND_VOLUME_DEFAULT);
             int gain = prefs.get(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, SoundLevel.SOUND_GAIN_DEFAULT);
+            // Safety: if gain is from a previous high-gain build (e.g. 32000), reset to default 1300
+            if (gain > 17500) {
+                gain = SoundLevel.SOUND_GAIN_DEFAULT;
+                prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, gain);
+            }
             int voxlevel = prefs.get(Preferences.PREF_SOUNDSYSTEM_VOICEACTIVATION_LEVEL, 5);
             boolean voxState = getService().isVoiceActivationEnabled();
             boolean txState = getService().isVoiceTransmitting();
@@ -542,11 +686,12 @@ extends AppCompatActivity
             if (getService().isVoiceActivationEnabled()) {
                 micSeekBar.setProgress(getClient().getVoiceActivationLevel());
             } else {
-                micSeekBar.setProgress(Utils.refVolumeToPercent(getClient().getSoundInputGainLevel()));
+                micSeekBar.setProgress(Utils.refGainToPercent(getClient().getSoundInputGainLevel()));
             }
             TextView volLevel = findViewById(R.id.vollevel_text);
-            volLevel.setText(Utils.refVolumeToPercent(mastervol) + "%");
-            volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText().toString()));
+            volLevel.setText(Utils.refVolumeToPercent(mastervol) + getString(R.string.unit_percent));
+            volLevel.setContentDescription(
+                    getString(R.string.speaker_volume_description, volLevel.getText().toString()));
         }
     }
 
@@ -561,77 +706,11 @@ extends AppCompatActivity
             isProximitySensorRegistered = true;
         }
 
-        if (audioIcons != null)
-            audioIcons.release();
-        sounds.clear();
-
-        audioIcons = new SoundPool(1, AudioManager.STREAM_MUSIC, 0);
-
-        if (prefs.get("server_lost_audio_icon", true)) {
-            sounds.put(SOUND_SERVERLOST, loadSound(SOUND_SERVERLOST, R.raw.serverlost));
-        }
-        if (prefs.get("rx_tx_audio_icon", true)) {
-            sounds.put(SOUND_VOICETXON, loadSound(SOUND_VOICETXON, R.raw.on));
-            sounds.put(SOUND_VOICETXOFF, loadSound(SOUND_VOICETXOFF, R.raw.off));
-        }
-        if (prefs.get("private_message_audio_icon", true)) {
-            sounds.put(SOUND_USERMSG, loadSound(SOUND_USERMSG, R.raw.user_message));
-        }
-        if (prefs.get("channel_message_audio_icon", true)) {
-            sounds.put(SOUND_CHANMSG, loadSound(SOUND_CHANMSG, R.raw.channel_message));
-        }
-        if (prefs.get("channel_message_sent_audio_icon", true)) {
-            sounds.put(SOUND_CHANMSGSENT, loadSound(SOUND_CHANMSGSENT, R.raw.channel_message_sent));
-        }
-        if (prefs.get("broadcast_message_audio_icon", true)) {
-            sounds.put(SOUND_BCASTMSG, loadSound(SOUND_BCASTMSG, R.raw.broadcast_message));
-        }
-        if (prefs.get("files_updated_audio_icon", true)) {
-            sounds.put(SOUND_FILESUPDATE, loadSound(SOUND_FILESUPDATE, R.raw.fileupdate));
-        }
-        if (prefs.get("voiceact_audio_icon", true)) {
-            sounds.put(SOUND_VOXENABLE, loadSound(SOUND_VOXENABLE, R.raw.voiceact_enable));
-            sounds.put(SOUND_VOXDISABLE, loadSound(SOUND_VOXDISABLE, R.raw.voiceact_disable));
-        }
-        if (prefs.get("voiceact_triggered_icon", true)) {
-            sounds.put(SOUND_VOXON, loadSound(SOUND_VOXON, R.raw.voiceact_on));
-            sounds.put(SOUND_VOXOFF, loadSound(SOUND_VOXOFF, R.raw.voiceact_off));
-        }
-        if (prefs.get("intercept_audio_icon", true)) {
-            sounds.put(SOUND_INTERCEPTON, loadSound(SOUND_INTERCEPTON, R.raw.intercept));
-            sounds.put(SOUND_INTERCEPTOFF, loadSound(SOUND_INTERCEPTOFF, R.raw.interceptend));
-        }
-        if (prefs.get("transmitready_icon", true)) {
-            sounds.put(SOUND_TXREADY, loadSound(SOUND_TXREADY, R.raw.txqueue_start));
-            sounds.put(SOUND_TXSTOP, loadSound(SOUND_TXSTOP, R.raw.txqueue_stop));
-        }
-        if (prefs.get("userjoin_icon", true)) {
-            sounds.put(SOUND_USERJOIN, loadSound(SOUND_USERJOIN, R.raw.user_join));
-        }
-        if (prefs.get("userleft_icon", true)) {
-            sounds.put(SOUND_USERLEFT, loadSound(SOUND_USERLEFT, R.raw.user_left));
-        }
-        if (prefs.get("userloggedin_icon", true)) {
-            sounds.put(SOUND_USERLOGGEDIN, loadSound(SOUND_USERLOGGEDIN, R.raw.logged_on));
-        }
-        if (prefs.get("userloggedoff_icon", true)) {
-            sounds.put(SOUND_USERLOGGEDOFF, loadSound(SOUND_USERLOGGEDOFF, R.raw.logged_off));
-        }
-        if (prefs.get("mute_all_audio_icon", true)) {
-            sounds.put(SOUND_MUTEALL, loadSound(SOUND_MUTEALL, R.raw.mute_all));
-            sounds.put(SOUND_UNMUTEALL, loadSound(SOUND_UNMUTEALL, R.raw.unmute_all));
-        }
 
         getTextMessagesAdapter().showLogMessages(prefs.get("show_log_messages", true));
 
         getWindow().getDecorView().setKeepScreenOn(prefs.get("keep_screen_on_checkbox", false));
-
-        ttsWrapper.useAnnouncements = prefs.get("pref_use_announcements", false);
-        ttsWrapper.setAccessibilityStream(prefs.get("pref_a11y_volume", false));
-        ttsWrapper.switchEngine(prefs.get("pref_speech_engine", TTSWrapper.defaultEngineName));
     }
-
-
 
     @Override
     protected void onPause() {
@@ -644,14 +723,7 @@ extends AppCompatActivity
         super.onStop();
 
         if (isFinishing()) {
-            if (audioIcons != null) {
-                audioIcons.release();
-                audioIcons = null;
-            }
-            if (ttsWrapper != null) {
-                ttsWrapper.shutdown();
-                ttsWrapper = null;
-            }
+            ttsWrapper = null;
 
             audioManager.setMode(AudioManager.MODE_NORMAL);
 
@@ -659,7 +731,7 @@ extends AppCompatActivity
                 Log.d(TAG, "Disconnecting from TeamTalk service");
                 getService().disablePhoneCallReaction();
                 getService().unwatchBluetoothHeadset();
-                getService().resetState();
+                // getService().resetState(); // Removed to allow service to handle logout cleanup after announcements
 
                 onServiceDisconnected(getService());
                 unbindService(mConnection);
@@ -672,6 +744,11 @@ extends AppCompatActivity
 
     @Override
     protected void onDestroy() {
+        if (instance == this) instance = null;
+        if (prefListener != null) {
+            androidx.preference.PreferenceManager.getDefaultSharedPreferences(this).unregisterOnSharedPreferenceChangeListener(prefListener);
+            prefListener = null;
+        }
         super.onDestroy();
 
         if (isProximitySensorRegistered) {
@@ -679,7 +756,7 @@ extends AppCompatActivity
             isProximitySensorRegistered = false;
         }
 
-        if(mConnection.isBound()) {
+        if (mConnection.isBound()) {
             Log.d(TAG, "Disconnecting from TeamTalk service");
 
             onServiceDisconnected(getService());
@@ -691,7 +768,31 @@ extends AppCompatActivity
     }
 
     @Override
+    public void onBackPressed() {
+        int channelsPageIndex = mSectionsPagerAdapter.getPositionForId(SectionsPagerAdapter.CHANNELS_PAGE);
+        if (channelsPageIndex != -1 && mViewPager.getCurrentItem() != channelsPageIndex) {
+            mViewPager.setCurrentItem(channelsPageIndex);
+        } else {
+            if (getService() != null) {
+                getService().disconnect();
+            }
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (mSectionsPagerAdapter != null) {
+            outState.putBoolean("tabs_expanded", mSectionsPagerAdapter.isExpanded);
+        }
+    }
+
+    @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQUEST_SETTINGS) {
+            return;
+        }
         if ((requestCode == REQUEST_SELECT_FILE) && (resultCode == RESULT_OK)) {
             Uri uri = data.getData();
             String path = AbsolutePathHelper.getRealPath(this.getBaseContext(), uri);
@@ -700,7 +801,7 @@ extends AppCompatActivity
                 if (localFile.canRead()) {
                     startFileUpload(path);
                 } else {
-                    Toast.makeText(this, getString(R.string.upload_failed, path), Toast.LENGTH_LONG).show();
+                    new FileCopyingTask().execute(uri);
                 }
             } else {
                 new FileCopyingTask().execute(uri);
@@ -729,7 +830,9 @@ extends AppCompatActivity
         protected String doInBackground(Uri... uris) {
             Uri uri = uris[0];
             Cursor cursor = getContentResolver().query(uri, null, null, null, null);
-            int columnIndex = ((cursor != null) && cursor.moveToFirst()) ? cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME) : -1;
+            int columnIndex = ((cursor != null) && cursor.moveToFirst())
+                    ? cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    : -1;
             if (columnIndex >= 0) {
                 File transitFile = new File(getCacheDir(), cursor.getString(columnIndex));
                 cursor.close();
@@ -743,7 +846,7 @@ extends AppCompatActivity
                     return null;
                 }
                 try (InputStream src = getContentResolver().openInputStream(uri);
-                     FileOutputStream dest = new FileOutputStream(transitFile)) {
+                        FileOutputStream dest = new FileOutputStream(transitFile)) {
                     byte[] buffer = new byte[1024];
                     int read;
                     while ((read = src.read(buffer)) > 0) {
@@ -791,9 +894,9 @@ extends AppCompatActivity
 
     private void showMicInputSelectionDialog() {
         final CharSequence[] items = {
-            getString(R.string.mic_input_default),
-            getString(R.string.mic_input_internal),
-            getString(R.string.mic_input_external)
+                getString(R.string.mic_input_default),
+                getString(R.string.mic_input_internal),
+                getString(R.string.mic_input_external)
         };
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -809,8 +912,8 @@ extends AppCompatActivity
         currentMicInput = inputType;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (inputType == MIC_INPUT_DEFAULT) {
-               audioManager.clearCommunicationDevice();
-               return;
+                audioManager.clearCommunicationDevice();
+                return;
             }
 
             AudioDeviceInfo targetDevice = null;
@@ -819,9 +922,10 @@ extends AppCompatActivity
                 if (inputType == MIC_INPUT_INTERNAL && device.getType() == AudioDeviceInfo.TYPE_BUILTIN_MIC) {
                     targetDevice = device;
                     break;
-                } else if (inputType == MIC_INPUT_EXTERNAL && (device.getType() == AudioDeviceInfo.TYPE_WIRED_HEADSET || device.getType() == AudioDeviceInfo.TYPE_WIRED_HEADPHONES)) {
-                     targetDevice = device;
-                     break;
+                } else if (inputType == MIC_INPUT_EXTERNAL && (device.getType() == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                        || device.getType() == AudioDeviceInfo.TYPE_WIRED_HEADPHONES)) {
+                    targetDevice = device;
+                    break;
                 }
             }
             if (targetDevice != null) {
@@ -829,7 +933,8 @@ extends AppCompatActivity
             }
         } else {
             // Fallback for older Android versions
-            // This is a "hack" as speakerphone primarily controls output but often effects input routing
+            // This is a "hack" as speakerphone primarily controls output but often effects
+            // input routing
             if (inputType == MIC_INPUT_INTERNAL) {
                 audioManager.setSpeakerphoneOn(true);
             } else if (inputType == MIC_INPUT_EXTERNAL) {
@@ -851,28 +956,32 @@ extends AppCompatActivity
 
     public class SectionsPagerAdapter extends FragmentStatePagerAdapter implements ViewPager.OnPageChangeListener {
 
-        public static final int FILES_PAGE          = 0,
-                                CHANNELS_PAGE       = 1,
-                                MEDIA_PAGE          = 2,
-                                MANAGEMENT_PAGE     = 3,
-                                GLOBAL_PAGE         = 4,
-                                EVENT_HISTORY_PAGE  = 5,
-                                CHAT_PAGE           = 6,
-                                SETTINGS_PAGE       = 7,
-                                PRIVATE_PAGE        = 8,
-                                CONNECTION_PAGE     = 9,
-                                ONLINE_USERS_PAGE   = 10,
-                                MANAGEMENT_STATUS_PAGE = 11,
-                                
-                                MORE_PAGE           = 100,
-                                LESS_PAGE           = 101,
+        public static final int FILES_PAGE = 0,
+                CHANNELS_PAGE = 1,
+                MEDIA_PAGE = 2,
+                MANAGEMENT_PAGE = 3,
+                GLOBAL_PAGE = 4,
+                EVENT_HISTORY_PAGE = 5,
+                CHAT_PAGE = 6,
+                SETTINGS_PAGE = 7,
+                PRIVATE_PAGE = 8,
+                CONNECTION_PAGE = 9,
+                ONLINE_USERS_PAGE = 10,
+                MANAGEMENT_STATUS_PAGE = 11,
 
-                                PAGE_COUNT          = 12;
+                MORE_PAGE = 100,
+                LESS_PAGE = 101,
+
+                PAGE_COUNT = 12;
 
         private class PageItem {
             String title;
             int id;
-            PageItem(String t, int i) { title = t; id = i; }
+
+            PageItem(String t, int i) {
+                title = t;
+                id = i;
+            }
         }
 
         public static class DummyFragment extends Fragment {
@@ -896,12 +1005,14 @@ extends AppCompatActivity
             allPages.add(new PageItem(getString(R.string.title_section_media).toUpperCase(l), MEDIA_PAGE));
             allPages.add(new PageItem(getString(R.string.title_section_management).toUpperCase(l), MANAGEMENT_PAGE));
             allPages.add(new PageItem(getString(R.string.title_section_chat).toUpperCase(l), GLOBAL_PAGE));
-            allPages.add(new PageItem(getString(R.string.title_section_event_history).toUpperCase(l), EVENT_HISTORY_PAGE));
+            allPages.add(
+                    new PageItem(getString(R.string.title_section_event_history).toUpperCase(l), EVENT_HISTORY_PAGE));
             allPages.add(new PageItem(getString(R.string.title_section_channel_chat).toUpperCase(l), CHAT_PAGE));
             allPages.add(new PageItem(getString(R.string.title_section_settings).toUpperCase(l), SETTINGS_PAGE));
             allPages.add(new PageItem(getString(R.string.title_section_private).toUpperCase(l), PRIVATE_PAGE));
             allPages.add(new PageItem(getString(R.string.title_section_connection).toUpperCase(l), CONNECTION_PAGE));
-            allPages.add(new PageItem(getString(R.string.title_section_online_users).toUpperCase(l), ONLINE_USERS_PAGE));
+            allPages.add(
+                    new PageItem(getString(R.string.title_section_online_users).toUpperCase(l), ONLINE_USERS_PAGE));
             allPages.add(new PageItem(getString(R.string.title_section_status).toUpperCase(l), MANAGEMENT_STATUS_PAGE));
 
             updateTabs(false);
@@ -915,7 +1026,7 @@ extends AppCompatActivity
             List<PageItem> secondaryPages = new ArrayList<>();
 
             for (PageItem p : allPages) {
-                if (p.id == FILES_PAGE || p.id == CHANNELS_PAGE || p.id == GLOBAL_PAGE || p.id == EVENT_HISTORY_PAGE) {
+                if (p.id == FILES_PAGE || p.id == CHANNELS_PAGE || p.id == CHAT_PAGE || p.id == PRIVATE_PAGE) {
                     primaryPages.add(p);
                 } else {
                     secondaryPages.add(p);
@@ -938,6 +1049,7 @@ extends AppCompatActivity
                 pageOrder.add(MORE_PAGE);
             }
             notifyDataSetChanged();
+            updateSwipeRestrictions();
         }
 
         @Override
@@ -955,35 +1067,36 @@ extends AppCompatActivity
             return -1;
         }
 
-        @Override @NonNull
+        @Override
+        @NonNull
         public Fragment getItem(int position) {
             int id = getIdForPosition(position);
 
-            switch(id) {
-                default :
-                case CHANNELS_PAGE :
+            switch (id) {
+                default:
+                case CHANNELS_PAGE:
                     return new ChannelsSectionFragment();
-                case CHAT_PAGE :
+                case CHAT_PAGE:
                     return new ChatSectionFragment();
-                case GLOBAL_PAGE :
+                case GLOBAL_PAGE:
                     return new GlobalSectionFragment();
-                case EVENT_HISTORY_PAGE :
+                case EVENT_HISTORY_PAGE:
                     return new EventHistorySectionFragment();
-                case PRIVATE_PAGE :
+                case PRIVATE_PAGE:
                     return new PrivateSectionFragment();
-                case MEDIA_PAGE :
+                case MEDIA_PAGE:
                     return new MediaSectionFragment();
-                case FILES_PAGE :
+                case FILES_PAGE:
                     return new FilesSectionFragment();
-                case ONLINE_USERS_PAGE :
+                case ONLINE_USERS_PAGE:
                     return new OnlineUsersSectionFragment();
-                case MANAGEMENT_PAGE :
+                case MANAGEMENT_PAGE:
                     return new ManagementSectionFragment();
-                case SETTINGS_PAGE :
+                case SETTINGS_PAGE:
                     return new SettingsSectionFragment();
-                case CONNECTION_PAGE :
+                case CONNECTION_PAGE:
                     return new ConnectionStatusSectionFragment();
-                case MANAGEMENT_STATUS_PAGE :
+                case MANAGEMENT_STATUS_PAGE:
                     return new ManageStatusFragment();
                 case MORE_PAGE:
                 case LESS_PAGE:
@@ -1000,12 +1113,15 @@ extends AppCompatActivity
         public CharSequence getPageTitle(int position) {
             int id = getIdForPosition(position);
             Locale l = Locale.getDefault();
-            
-            if (id == MORE_PAGE) return getString(R.string.tab_more).toUpperCase(l);
-            if (id == LESS_PAGE) return getString(R.string.tab_less).toUpperCase(l);
+
+            if (id == MORE_PAGE)
+                return getString(R.string.tab_more).toUpperCase(l);
+            if (id == LESS_PAGE)
+                return getString(R.string.tab_less).toUpperCase(l);
 
             for (PageItem p : allPages) {
-                if (p.id == id) return p.title;
+                if (p.id == id)
+                    return p.title;
             }
             return null;
         }
@@ -1022,7 +1138,8 @@ extends AppCompatActivity
             if (id == MORE_PAGE) {
                 mViewPager.post(() -> {
                     updateTabs(true);
-                    // Select the first secondary tab (index 5: 0-3 primary, 4 Less, 5 First Secondary)
+                    // Select the first secondary tab (index 5: 0-3 primary, 4 Less, 5 First
+                    // Secondary)
                     if (pageOrder.size() > 5) {
                         mViewPager.setCurrentItem(5, false); // No smooth scroll to avoid weirdness
                     }
@@ -1056,13 +1173,28 @@ extends AppCompatActivity
         public void onPageScrollStateChanged(int state) {
 
         }
+
+        private void updateSwipeRestrictions() {
+            java.util.Set<Integer> restricted = new java.util.HashSet<>();
+            int morePos = getPositionForId(MORE_PAGE);
+            if (morePos != -1) restricted.add(morePos);
+            int lessPos = getPositionForId(LESS_PAGE);
+            if (lessPos != -1) restricted.add(lessPos);
+            mViewPager.setRestrictedPositions(restricted);
+        }
+    }
+
+    private void updateSwipeRestrictions() {
+        if (mSectionsPagerAdapter != null) {
+            mSectionsPagerAdapter.updateSwipeRestrictions();
+        }
     }
 
     private void fileSelectionStart() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
-        Intent i = Intent.createChooser(intent, "File");
+        Intent i = Intent.createChooser(intent, getString(R.string.chooser_file));
         startActivityForResult(i, REQUEST_SELECT_FILE);
     }
 
@@ -1075,30 +1207,28 @@ extends AppCompatActivity
 
     private boolean areMediaPermissionsComplete() {
         return !(Permissions.READ_MEDIA_IMAGES.isPending() ||
-                 Permissions.READ_MEDIA_VIDEO.isPending() ||
-                 Permissions.READ_MEDIA_AUDIO.isPending());
+                Permissions.READ_MEDIA_VIDEO.isPending() ||
+                Permissions.READ_MEDIA_AUDIO.isPending());
     }
 
     private void editChannelProperties(Channel channel) {
         Intent intent = new Intent(this, ChannelPropActivity.class);
-        startActivityForResult(intent.putExtra(ChannelPropActivity.EXTRA_CHANNELID, channel.nChannelID), REQUEST_EDITCHANNEL);
+        startActivityForResult(intent.putExtra(ChannelPropActivity.EXTRA_CHANNELID, channel.nChannelID),
+                REQUEST_EDITCHANNEL);
     }
 
     private void leaveChannel() {
         getClient().doLeaveChannel();
-        accessibilityAssistant.lockEvents();
         channelsAdapter.notifyDataSetChanged();
-        accessibilityAssistant.unlockEvents();
     }
 
     private void joinChannelUnsafe(Channel channel, String passwd) {
         int cmdid = getClient().doJoinChannelByID(channel.nChannelID, passwd);
-        if(cmdid>0) {
+        if (cmdid > 0) {
             activecmds.put(cmdid, CmdComplete.CMD_COMPLETE_JOIN);
             channel.szPassword = passwd;
             getService().setJoinChannel(channel);
-        }
-        else {
+        } else {
             Toast.makeText(this, R.string.text_con_cmderr, Toast.LENGTH_LONG).show();
         }
     }
@@ -1121,29 +1251,28 @@ extends AppCompatActivity
     }
 
     private void joinChannel(final Channel channel) {
-        if(channel.bPassword) {
+        if (channel.bPassword) {
             AlertDialog.Builder alert = new AlertDialog.Builder(this);
             alert.setTitle(R.string.pref_title_join_channel);
             alert.setMessage(R.string.channel_password_prompt);
             final EditText input = new EditText(this);
-            input.setInputType(InputType.TYPE_TEXT_VARIATION_PASSWORD|InputType.TYPE_CLASS_TEXT);
+            input.setInputType(InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_CLASS_TEXT);
             input.setText(channel.szPassword);
             input.requestFocus();
             alert.setView(input);
             alert.setPositiveButton(android.R.string.ok, (dialog, whichButton) -> {
-                InputMethodManager im = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+                InputMethodManager im = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
                 im.hideSoftInputFromWindow(input.getWindowToken(), 0);
                 joinChannel(channel, input.getText().toString());
             });
             alert.setNegativeButton(android.R.string.cancel, (dialog, whichButton) -> {
-                InputMethodManager im = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+                InputMethodManager im = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
                 im.hideSoftInputFromWindow(input.getWindowToken(), 0);
             });
-			final AlertDialog dialog = alert.create();
+            final AlertDialog dialog = alert.create();
             dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
             dialog.show();
-        }
-        else {
+        } else {
             joinChannel(channel, "");
         }
     }
@@ -1151,24 +1280,38 @@ extends AppCompatActivity
     private void setCurrentChannel(Channel channel) {
         curchannel = channel;
         ActionBar ab = getSupportActionBar();
-        if (ab != null)
-            ab.setSubtitle((channel != null) ? channel.szName : null);
+        if (ab != null) {
+            if (channel == null) {
+                ab.setTitle(R.string.root_server);
+            } else {
+                boolean isInitChan = (channel.nChannelID == 1) ||
+                                     (channel.nChannelID == getClient().getRootChannelID());
+
+                ab.setTitle(isInitChan ? getString(R.string.init_channel) : (channel.szName.isEmpty() ? getString(R.string.no_name) : channel.szName));
+            }
+            ab.setSubtitle(null);
+        }
         invalidateOptionsMenu();
     }
+
 
     private void setMyChannel(Channel channel) {
         mychannel = channel;
 
         adjustVoiceGain();
+        invalidateOptionsMenu();
     }
 
     private String getChannelNameForTTS(int channelId) {
-        if (channelId == 0) {
+        if (channelId <= 1 || (getClient() != null && channelId == getClient().getRootChannelID())) {
             return getString(R.string.text_tts_root_channel_name);
         }
         if (getService() != null && getService().getChannels() != null) {
             Channel chan = getService().getChannels().get(channelId);
             if (chan != null) {
+                if ("/".equals(chan.szName.trim())) {
+                    return getString(R.string.text_tts_root_channel_name);
+                }
                 return chan.szName;
             }
         }
@@ -1189,29 +1332,54 @@ extends AppCompatActivity
         User olduser = this.users.get(user.nUserID);
 
         if (olduser != null && this.ttsWrapper != null) {
-            Utils.ttsSubscriptionChanged(getBaseContext(), olduser, user).ifPresent((text -> ttsWrapper.speak(text)));
+            Utils.ttsSubscriptionChanged(getBaseContext(), olduser, user).ifPresent((text -> speakAndLog(text, MyTextMessage.MSGTYPE_LOG_INFO)));
         }
 
-        if (olduser != null && (this.sounds.get(SOUND_INTERCEPTON) != 0 && this.sounds.get(SOUND_INTERCEPTOFF) != 0)) {
-            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_USER_MSG).ifPresent(isOn -> audioIcons.play((isOn ? sounds.get(SOUND_INTERCEPTON) : sounds.get(SOUND_INTERCEPTOFF)), 1.0f, 1.0f, 0, 0, 1.0f));
-            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_CHANNEL_MSG).ifPresent(isOn -> audioIcons.play((isOn ? sounds.get(SOUND_INTERCEPTON) : sounds.get(SOUND_INTERCEPTOFF)), 1.0f, 1.0f, 0, 0, 1.0f));
-            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_VOICE).ifPresent(isOn -> audioIcons.play((isOn ? sounds.get(SOUND_INTERCEPTON) : sounds.get(SOUND_INTERCEPTOFF)), 1.0f, 1.0f, 0, 0, 1.0f));
-            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_VIDEOCAPTURE).ifPresent(isOn -> audioIcons.play((isOn ? sounds.get(SOUND_INTERCEPTON) : sounds.get(SOUND_INTERCEPTOFF)), 1.0f, 1.0f, 0, 0, 1.0f));
-            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_DESKTOP).ifPresent(isOn -> audioIcons.play((isOn ? sounds.get(SOUND_INTERCEPTON) : sounds.get(SOUND_INTERCEPTOFF)), 1.0f, 1.0f, 0, 0, 1.0f));
-            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_MEDIAFILE).ifPresent(isOn -> audioIcons.play((isOn ? sounds.get(SOUND_INTERCEPTON) : sounds.get(SOUND_INTERCEPTOFF)), 1.0f, 1.0f, 0, 0, 1.0f));
+        if (olduser != null) {
+            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_USER_MSG)
+                    .ifPresent(isOn -> playSound(isOn ? SOUND_INTERCEPTON : SOUND_INTERCEPTOFF));
+            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_CHANNEL_MSG)
+                    .ifPresent(isOn -> playSound(isOn ? SOUND_INTERCEPTON : SOUND_INTERCEPTOFF));
+            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_VOICE)
+                    .ifPresent(isOn -> playSound(isOn ? SOUND_INTERCEPTON : SOUND_INTERCEPTOFF));
+            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_VIDEOCAPTURE)
+                    .ifPresent(isOn -> playSound(isOn ? SOUND_INTERCEPTON : SOUND_INTERCEPTOFF));
+            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_DESKTOP)
+                    .ifPresent(isOn -> playSound(isOn ? SOUND_INTERCEPTON : SOUND_INTERCEPTOFF));
+            Utils.subscriptionChanged(olduser, user, Subscription.SUBSCRIBE_INTERCEPT_MEDIAFILE)
+                    .ifPresent(isOn -> playSound(isOn ? SOUND_INTERCEPTON : SOUND_INTERCEPTOFF));
         }
     }
 
     private boolean isVisibleChannel(int chanid) {
-        if (curchannel != null) {
-            if (curchannel.nParentID == chanid)
-                return true;
-            Channel channel = getService().getChannels().get(chanid);
-            if (channel != null)
-                return curchannel.nChannelID == channel.nParentID;
+        if (curchannel == null) {
+            return chanid == 0 || chanid == getClient().getRootChannelID();
         }
-        else {
-            return chanid == getClient().getRootChannelID();
+        if (curchannel.nChannelID == chanid)
+            return true;
+        // Check if chanid is an ancestor of curchannel (i.e. curchannel is inside
+        // chanid)
+        int id = curchannel.nChannelID;
+        while (id != 0) {
+            Channel c = getService().getChannels().get(id);
+            if (c == null)
+                break;
+            if (c.nParentID == chanid)
+                return true;
+            id = c.nParentID;
+        }
+        // Check if chanid is a descendant of curchannel (chanid is inside curchannel)
+        Channel channel = getService().getChannels().get(chanid);
+        if (channel == null)
+            return false;
+        int parentId = channel.nParentID;
+        while (parentId != 0) {
+            if (parentId == curchannel.nChannelID)
+                return true;
+            Channel parent = getService().getChannels().get(parentId);
+            if (parent == null)
+                break;
+            parentId = parent.nParentID;
         }
         return false;
     }
@@ -1232,8 +1400,9 @@ extends AppCompatActivity
         public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
             View rootView = inflater.inflate(R.layout.fragment_main_channels, container, false);
 
-
             ListView channelsList = rootView.findViewById(R.id.listChannels);
+            mainActivity.listChannels = channelsList;
+            mainActivity.accessibilityAssistant.registerPage(rootView, SectionsPagerAdapter.CHANNELS_PAGE);
             channelsList.setAdapter(mainActivity.getChannelsAdapter());
             channelsList.setOnItemClickListener(mainActivity);
             channelsList.setOnItemLongClickListener(mainActivity);
@@ -1250,7 +1419,8 @@ extends AppCompatActivity
     public static class ChatSectionFragment extends Fragment {
         MainActivity mainActivity;
 
-private EditText newmsg;
+        private EditText newmsg;
+
         public ChatSectionFragment() {
         }
 
@@ -1298,11 +1468,11 @@ private EditText newmsg;
 
             if (cmdid > 0) {
                 mainActivity.activecmds.put(cmdid, CmdComplete.CMD_COMPLETE_TEXTMSG);
+                MainActivity.playChannelMessageSentSound();
                 newmsg.setText("");
-            }
-            else {
+            } else {
                 Toast.makeText(mainActivity, getResources().getString(R.string.text_con_cmderr),
-                Toast.LENGTH_LONG).show();
+                        Toast.LENGTH_LONG).show();
             }
         }
 
@@ -1340,12 +1510,12 @@ private EditText newmsg;
 
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                                 Bundle savedInstanceState) {
+                Bundle savedInstanceState) {
             View rootView = inflater.inflate(R.layout.fragment_main_media, container, false);
             mainActivity.accessibilityAssistant.registerPage(rootView, SectionsPagerAdapter.MEDIA_PAGE);
 
-            ExpandableListView mediaview = rootView.findViewById(R.id.media_elist_view);
-            mediaview.setAdapter(mainActivity.getMediaAdapter());
+            mainActivity.mediaListView = rootView.findViewById(R.id.media_elist_view);
+            mainActivity.mediaListView.setAdapter(mainActivity.getMediaAdapter());
             return rootView;
         }
     }
@@ -1355,7 +1525,8 @@ private EditText newmsg;
         @Override
         public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
             MainActivity mainActivity = (MainActivity) getActivity();
-            if (mainActivity == null) return;
+            if (mainActivity == null)
+                return;
             mainActivity.accessibilityAssistant.registerPage(view, SectionsPagerAdapter.FILES_PAGE);
             if (mainActivity.getFilesAdapter() != null) {
                 setListAdapter(mainActivity.getFilesAdapter());
@@ -1417,15 +1588,16 @@ private EditText newmsg;
                     mainActivity.getClient().doTextMessage(m);
                 }
                 editMsg.setText("");
-                if (mainActivity.sounds.get(mainActivity.SOUND_BCASTMSG) != 0)
-                    mainActivity.audioIcons.play(mainActivity.sounds.get(mainActivity.SOUND_BCASTMSG), 1.0f, 1.0f, 0, 0, 1.0f);
+                if (mainActivity.prefs.get("broadcast_message_audio_icon", true))
+                    mainActivity.playSound(mainActivity.SOUND_BCASTMSG);
 
                 if (mainActivity.ttsWrapper != null && mainActivity.prefs.get("broadcast_message_checkbox", true)) {
                     UserAccount myaccount = new UserAccount();
                     mainActivity.getClient().getMyUserAccount(myaccount);
                     User me = mainActivity.getService().getUsers().get(mainActivity.getClient().getMyUserID());
                     String name = (me != null) ? Utils.getDisplayName(mainActivity, me) : myaccount.szUsername;
-                    mainActivity.ttsWrapper.speak(mainActivity.getString(R.string.text_tts_broadcast_message, name, msg));
+                    mainActivity.ttsWrapper
+                            .speak(mainActivity.getString(R.string.text_tts_broadcast_message, name, msg));
                 }
             }
         }
@@ -1446,7 +1618,6 @@ private EditText newmsg;
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 
-
             View rootView = inflater.inflate(R.layout.fragment_main_global, container, false);
             mainActivity.accessibilityAssistant.registerPage(rootView, SectionsPagerAdapter.EVENT_HISTORY_PAGE);
 
@@ -1458,11 +1629,12 @@ private EditText newmsg;
 
             msgList.setAdapter(mainActivity.eventHistoryAdapter);
 
-
             View editMsg = rootView.findViewById(R.id.global_msg_edittext);
             View sendBtn = rootView.findViewById(R.id.global_msg_sendbtn);
-            if(editMsg != null) editMsg.setVisibility(View.GONE);
-            if(sendBtn != null) sendBtn.setVisibility(View.GONE);
+            if (editMsg != null)
+                editMsg.setVisibility(View.GONE);
+            if (sendBtn != null)
+                sendBtn.setVisibility(View.GONE);
 
             return rootView;
         }
@@ -1517,14 +1689,17 @@ private EditText newmsg;
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
             View rootView = inflater.inflate(R.layout.fragment_main_online_users, container, false);
-            if (mainActivity == null) return rootView;
+            if (mainActivity == null)
+                return rootView;
             mainActivity.accessibilityAssistant.registerPage(rootView, SectionsPagerAdapter.ONLINE_USERS_PAGE);
 
             ListView userList = rootView.findViewById(R.id.server_users_listview);
 
             if (mainActivity.getService() != null && mainActivity.getService().getUsers() != null) {
-                ArrayList<dk.bearware.User> userListArray = new ArrayList<>(mainActivity.getService().getUsers().values());
-                mainActivity.onlineUsersAdapter = new dk.bearware.gui.OnlineUsersAdapter(mainActivity, mainActivity.getService(), userListArray);
+                ArrayList<dk.bearware.User> userListArray = new ArrayList<>(
+                        mainActivity.getService().getUsers().values());
+                mainActivity.onlineUsersAdapter = new dk.bearware.gui.OnlineUsersAdapter(mainActivity,
+                        mainActivity.getService(), userListArray, mainActivity.accessibilityAssistant);
                 userList.setAdapter(mainActivity.onlineUsersAdapter);
                 userList.setOnItemLongClickListener(mainActivity);
             }
@@ -1556,7 +1731,8 @@ private EditText newmsg;
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
             View rootView = inflater.inflate(R.layout.fragment_main_management, container, false);
-            if (mainActivity == null) return rootView;
+            if (mainActivity == null)
+                return rootView;
             mainActivity.accessibilityAssistant.registerPage(rootView, SectionsPagerAdapter.MANAGEMENT_PAGE);
 
             propsBtn = rootView.findViewById(R.id.server_props_btn);
@@ -1598,7 +1774,8 @@ private EditText newmsg;
         }
 
         private void updateButtonVisibility() {
-            if (mainActivity == null || mainActivity.getClient() == null) return;
+            if (mainActivity == null || mainActivity.getClient() == null)
+                return;
 
             if ((mainActivity.getClient().getFlags() & ClientFlag.CLIENT_CONNECTED) == 0) {
                 handler.removeCallbacks(checkPermissionsRunnable);
@@ -1611,23 +1788,19 @@ private EditText newmsg;
 
                 if ((myAccount.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN) {
                     accountsBtn.setVisibility(View.VISIBLE);
+                    serverStatsBtn.setVisibility(View.VISIBLE);
                 } else {
                     accountsBtn.setVisibility(View.GONE);
+                    serverStatsBtn.setVisibility(View.GONE);
                 }
 
-                if ((myAccount.uUserRights & UserRight.USERRIGHT_UPDATE_SERVERPROPERTIES) != 0) {
-                    propsBtn.setVisibility(View.VISIBLE);
-                } else {
-                    propsBtn.setVisibility(View.GONE);
-                }
+                propsBtn.setVisibility(View.VISIBLE);
 
                 if ((myAccount.uUserRights & UserRight.USERRIGHT_BAN_USERS) != 0) {
                     serverBansBtn.setVisibility(View.VISIBLE);
                 } else {
                     serverBansBtn.setVisibility(View.GONE);
                 }
-
-                serverStatsBtn.setVisibility(View.VISIBLE);
 
             } else {
                 handler.removeCallbacks(checkPermissionsRunnable);
@@ -1640,25 +1813,25 @@ private EditText newmsg;
         MainActivity mainActivity;
 
         private static final int[] TITLES = {
-            R.string.pref_header_general,
-            R.string.pref_header_display,
-            R.string.pref_title_audio_icons,
-            R.string.pref_header_tts,
-            R.string.pref_header_serverlist,
-            R.string.pref_header_connection,
-            R.string.pref_header_soundsystem,
-            R.string.pref_cat_about
+                R.string.pref_header_general,
+                R.string.pref_header_display,
+                R.string.pref_title_audio_icons,
+                R.string.pref_header_tts,
+                R.string.pref_header_serverlist,
+                R.string.pref_header_connection,
+                R.string.pref_header_soundsystem,
+                R.string.pref_cat_about
         };
 
         private static final String[] FRAGMENTS = {
-            dk.bearware.gui.PreferencesActivity.GeneralPreferenceFragment.class.getName(),
-            dk.bearware.gui.PreferencesActivity.DisplayPreferenceFragment.class.getName(),
-            dk.bearware.gui.PreferencesActivity.SoundEventsPreferenceFragment.class.getName(),
-            dk.bearware.gui.PreferencesActivity.TtsPreferenceFragment.class.getName(),
-            dk.bearware.gui.PreferencesActivity.ServerListPreferenceFragment.class.getName(),
-            dk.bearware.gui.PreferencesActivity.ConnectionPreferenceFragment.class.getName(),
-            dk.bearware.gui.PreferencesActivity.SoundSystemPreferenceFragment.class.getName(),
-            dk.bearware.gui.PreferencesActivity.AboutPreferenceFragment.class.getName()
+                dk.bearware.gui.PreferencesActivity.GeneralPreferenceFragment.class.getName(),
+                dk.bearware.gui.PreferencesActivity.DisplayPreferenceFragment.class.getName(),
+                dk.bearware.gui.PreferencesActivity.SoundEventsPreferenceFragment.class.getName(),
+                dk.bearware.gui.PreferencesActivity.TtsPreferenceFragment.class.getName(),
+                dk.bearware.gui.PreferencesActivity.ServerListPreferenceFragment.class.getName(),
+                dk.bearware.gui.PreferencesActivity.ConnectionPreferenceFragment.class.getName(),
+                dk.bearware.gui.PreferencesActivity.SoundSystemPreferenceFragment.class.getName(),
+                dk.bearware.gui.PreferencesActivity.AboutPreferenceFragment.class.getName()
         };
 
         public SettingsSectionFragment() {
@@ -1683,10 +1856,9 @@ private EditText newmsg;
             }
 
             android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<>(
-                getActivity(),
-                android.R.layout.simple_list_item_1,
-                items
-            );
+                    getActivity(),
+                    android.R.layout.simple_list_item_1,
+                    items);
             listView.setAdapter(adapter);
 
             listView.setOnItemClickListener((parent, view, position, id) -> {
@@ -1694,11 +1866,9 @@ private EditText newmsg;
                     Intent intent = new Intent(mainActivity, dk.bearware.gui.PreferencesActivity.class);
                     intent.putExtra(android.preference.PreferenceActivity.EXTRA_SHOW_FRAGMENT, FRAGMENTS[position]);
                     intent.putExtra(android.preference.PreferenceActivity.EXTRA_NO_HEADERS, true);
-                    mainActivity.startActivity(intent);
+                    mainActivity.startActivityForResult(intent, mainActivity.REQUEST_SETTINGS);
                 }
             });
-
-
 
             return rootView;
         }
@@ -1710,7 +1880,8 @@ private EditText newmsg;
         CountDownTimer timer;
         ClientStatistics prev_stats;
 
-        public ConnectionStatusSectionFragment() {}
+        public ConnectionStatusSectionFragment() {
+        }
 
         @Override
         public void onAttach(@NonNull Activity activity) {
@@ -1746,9 +1917,11 @@ private EditText newmsg;
             if (timer == null) {
                 timer = new CountDownTimer(10000, 1000) {
                     public void onTick(long millisUntilFinished) {
-                        if (mainActivity == null || mainActivity.isFinishing()) return;
+                        if (mainActivity == null || mainActivity.isFinishing())
+                            return;
                         updateStats();
                     }
+
                     public void onFinish() {
                         start();
                     }
@@ -1764,7 +1937,8 @@ private EditText newmsg;
         }
 
         private void updateStats() {
-            if (mainActivity.accessibilityAssistant.isUiUpdateDiscouraged()) return;
+            if (mainActivity.accessibilityAssistant.isUiUpdateDiscouraged())
+                return;
 
             String con = mainActivity.getString(R.string.stat_offline);
             int con_color = Color.RED;
@@ -1779,27 +1953,31 @@ private EditText newmsg;
                 con_color = Color.GREEN;
             }
 
-            connection.setText(mainActivity.getString(R.string.label_connection) + " " + con);
+            connection.setText(mainActivity.getString(R.string.fmt_label_value, mainActivity.getString(R.string.label_connection), con));
             connection.setTextColor(con_color);
 
             ClientStatistics stats = new ClientStatistics();
-            if(!mainActivity.getClient().getClientStatistics(stats)) return;
+            if (!mainActivity.getClient().getClientStatistics(stats))
+                return;
 
-            if(prev_stats == null) prev_stats = stats;
+            if (prev_stats == null)
+                prev_stats = stats;
 
             long totalrx = stats.nUdpBytesRecv - prev_stats.nUdpBytesRecv;
             long totaltx = stats.nUdpBytesSent - prev_stats.nUdpBytesSent;
 
             String str;
-            if(stats.nUdpPingTimeMs >= 0) {
+            if (stats.nUdpPingTimeMs >= 0) {
                 str = String.format(Locale.ROOT, "%1$d", stats.nUdpPingTimeMs);
-                ping.setText(mainActivity.getString(R.string.label_ping) + " " + str);
-                if(stats.nUdpPingTimeMs > 250) ping.setTextColor(Color.RED);
-                else ping.setTextColor(connection.getTextColors().getDefaultColor());
+                ping.setText(mainActivity.getString(R.string.fmt_label_value, mainActivity.getString(R.string.label_ping), str));
+                if (stats.nUdpPingTimeMs > 250)
+                    ping.setTextColor(Color.RED);
+                else
+                    ping.setTextColor(connection.getTextColors().getDefaultColor());
             }
 
-            str = String.format(Locale.ROOT, "%1$d/%2$d KB", totalrx/ 1024, totaltx / 1024);
-            total.setText(mainActivity.getString(R.string.label_rxtx) + " " + str);
+            str = getString(R.string.fmt_kb_rxtx, totalrx / 1024, totaltx / 1024);
+            total.setText(mainActivity.getString(R.string.fmt_label_value, mainActivity.getString(R.string.label_rxtx), str));
 
             prev_stats = stats;
         }
@@ -1808,11 +1986,11 @@ private EditText newmsg;
     class ChannelListAdapter extends BaseAdapter {
 
         private static final int PARENT_CHANNEL_VIEW_TYPE = 0,
-            CHANNEL_VIEW_TYPE = 1,
-            USER_VIEW_TYPE = 2,
-            INFO_VIEW_TYPE = 3,
+                CHANNEL_VIEW_TYPE = 1,
+                USER_VIEW_TYPE = 2,
+                INFO_VIEW_TYPE = 3,
 
-            VIEW_TYPE_COUNT = 4;
+                VIEW_TYPE_COUNT = 4;
 
         private final LayoutInflater inflater;
 
@@ -1830,41 +2008,43 @@ private EditText newmsg;
             stickychannels.clear();
             currentusers.clear();
 
-            int chanid;
-            if(curchannel != null) {
-                chanid = curchannel.nChannelID;
+            if (curchannel != null) {
+                int chanid = curchannel.nChannelID;
 
-                subchannels = Utils.getSubChannels(chanid, getService().getChannels());
-                stickychannels = Utils.getStickyChannels(chanid, getService().getChannels());
-                currentusers = Utils.getUsers(chanid, getService().getUsers());
-            }
-            else {
-                chanid = getClient().getRootChannelID();
-                Channel root = getService().getChannels().get(chanid);
-                if(root != null)
-                    subchannels.add(root);
+                subchannels.addAll(Utils.getSubChannels(chanid, getService().getChannels()));
+                stickychannels.addAll(Utils.getStickyChannels(chanid, getService().getChannels()));
+                currentusers.addAll(Utils.getUsers(chanid, getService().getUsers()));
+            } else {
+                // Server Root view (ID 0)
+                int rootChanId = getClient().getRootChannelID();
+                // Only show users who are not in any channel (channel ID 0)
+                currentusers.addAll(Utils.getUsers(0, getService().getUsers()));
+                Channel rootObj = getService().getChannels().get(rootChanId);
+                if (rootObj != null) subchannels.add(rootObj);
             }
 
             String sortOrder = prefs.get("pref_channel_sort", "0");
             Comparator<Channel> comparator;
 
             if ("2".equals(sortOrder)) { // Popularity
-                 comparator = (c1, c2) -> {
-                     int count1 = 0;
-                     int count2 = 0;
-                     for (User u : MainActivity.this.users.values()) {
-                         if (u.nChannelID == c1.nChannelID) count1++;
-                         if (u.nChannelID == c2.nChannelID) count2++;
-                     }
-                     if (count1 != count2) {
-                         return count2 - count1; // Descending
-                     }
-                     return c1.szName.compareToIgnoreCase(c2.szName); // Secondary sort A-Z
-                 };
+                comparator = (c1, c2) -> {
+                    int count1 = 0;
+                    int count2 = 0;
+                    for (User u : getService().getUsers().values()) {
+                        if (u.nChannelID == c1.nChannelID)
+                            count1++;
+                        if (u.nChannelID == c2.nChannelID)
+                            count2++;
+                    }
+                    if (count1 != count2) {
+                        return count2 - count1; // Descending
+                    }
+                    return c1.szName.compareToIgnoreCase(c2.szName); // Secondary sort A-Z
+                };
             } else if ("1".equals(sortOrder)) { // Z-A
-                 comparator = (c1, c2) -> c2.szName.compareToIgnoreCase(c1.szName);
+                comparator = (c1, c2) -> c2.szName.compareToIgnoreCase(c1.szName);
             } else { // Default A-Z
-                 comparator = (c1, c2) -> c1.szName.compareToIgnoreCase(c2.szName);
+                comparator = (c1, c2) -> c1.szName.compareToIgnoreCase(c2.szName);
             }
 
             Collections.sort(subchannels, comparator);
@@ -1874,10 +2054,10 @@ private EditText newmsg;
             Collections.sort(currentusers, (u1, u2) -> {
                 if (prefs.get("movetalk_checkbox", true)) {
                     if (((u1.uUserState & UserState.USERSTATE_VOICE) != 0) &&
-                        ((u2.uUserState & UserState.USERSTATE_VOICE) == 0))
+                            ((u2.uUserState & UserState.USERSTATE_VOICE) == 0))
                         return -1;
                     else if (((u1.uUserState & UserState.USERSTATE_VOICE) == 0) &&
-                             ((u2.uUserState & UserState.USERSTATE_VOICE) != 0))
+                            ((u2.uUserState & UserState.USERSTATE_VOICE) != 0))
                         return 1;
                 }
 
@@ -1900,33 +2080,40 @@ private EditText newmsg;
 
         @Override
         public Object getItem(int position) {
+            if (curchannel == null) {
+                if (position < currentusers.size())
+                    return currentusers.get(position);
+                position -= currentusers.size();
+
+                if (position < subchannels.size())
+                    return subchannels.get(position);
+                position -= subchannels.size();
+
+                return stickychannels.get(position);
+            }
 
             if (position < stickychannels.size()) {
                 return stickychannels.get(position);
             }
-
             position -= stickychannels.size();
 
             if (position < currentusers.size()) {
                 return currentusers.get(position);
             }
-
             position -= currentusers.size();
 
-            if (curchannel != null) {
-                if(position == 0) {
-                    if (curchannel.nParentID > 0) {
-                        Channel parent = getService().getChannels().get(curchannel.nParentID);
-                        if(parent != null)
-                            return parent;
-                        return new Channel();
-                    } else {
-                        return new Channel(); // Signals Root Parent (handled in onItemClick)
-                    }
+            if (position == 0) {
+                if (curchannel.nParentID > 0) {
+                    Channel parent = getService().getChannels().get(curchannel.nParentID);
+                    if (parent != null)
+                        return parent;
+                    return new Channel();
+                } else {
+                    return new Channel(); // Signals Root Parent
                 }
-
-                position--;
             }
+            position--;
+
             return subchannels.get(position);
         }
 
@@ -1937,24 +2124,29 @@ private EditText newmsg;
 
         @Override
         public int getItemViewType(int position) {
+            if (curchannel == null) {
+                if (position < currentusers.size())
+                    return USER_VIEW_TYPE;
+                position -= currentusers.size();
+
+                if (position < subchannels.size())
+                    return CHANNEL_VIEW_TYPE;
+                position -= subchannels.size();
+
+                return INFO_VIEW_TYPE;
+            }
 
             if (position < stickychannels.size())
                 return INFO_VIEW_TYPE;
-
             position -= stickychannels.size();
 
             if (position < currentusers.size())
                 return USER_VIEW_TYPE;
-
             position -= currentusers.size();
 
-            if (curchannel != null) {
-                if (position == 0) {
-                    return PARENT_CHANNEL_VIEW_TYPE;
-                }
-
-                position--;
-            }
+            if (position == 0)
+                return PARENT_CHANNEL_VIEW_TYPE;
+            position--;
 
             return CHANNEL_VIEW_TYPE;
         }
@@ -1969,17 +2161,71 @@ private EditText newmsg;
 
             Object item = getItem(position);
 
-            if(item instanceof Channel channel) {
+            if (item instanceof Channel channel) {
 
                 switch (getItemViewType(position)) {
-                    case PARENT_CHANNEL_VIEW_TYPE :
+                    case PARENT_CHANNEL_VIEW_TYPE:
 
                         if (convertView == null ||
                                 convertView.findViewById(R.id.parentname) == null)
                             convertView = inflater.inflate(R.layout.item_channel_back, parent, false);
+
+                        TextView parentname = convertView.findViewById(R.id.parentname);
+                        TextView parentTopic = convertView.findViewById(R.id.chantopic);
+                        TextView parentPop = convertView.findViewById(R.id.population);
+
+                        if (curchannel != null) {
+                            if (curchannel.nParentID == 0) {
+                                // Root level parent (back to Server Root/Root Server)
+                                parentname.setText(R.string.root_server);
+                            } else {
+                                // Nested subchannel level parent
+                                Channel parentChan = getService().getChannels().get(curchannel.nParentID);
+                                if (parentChan != null) {
+                                    boolean isParentInitChan = (parentChan.nChannelID == 1) ||
+                                                               (parentChan.nChannelID == getClient().getRootChannelID()) ||
+                                                               (!myUserAccount.szInitChannel.isEmpty() && 
+                                                                parentChan.szName.equals(Utils.getChannelNameFromPath(myUserAccount.szInitChannel)));
+                                    if (isParentInitChan) {
+                                        parentname.setText(R.string.init_channel);
+                                    } else {
+                                        parentname.setText(parentChan.szName.isEmpty() ? getString(R.string.no_name) : parentChan.szName);
+                                    }
+                                } else {
+                                    parentname.setText(R.string.root_server);
+                                }
+                            }
+                        }
+                        if (parentTopic != null) parentTopic.setText("");
+                        if (parentPop != null) {
+                            if (curchannel != null) {
+                                if (curchannel.nParentID > 0) {
+                                    Channel parentChan = getService().getChannels().get(curchannel.nParentID);
+                                    if (parentChan != null) {
+                                        int population = Utils.getUsers(parentChan.nChannelID, getService().getUsers()).size();
+                                        int populationSub = Utils.getUsers(parentChan.nChannelID, getService().getUsers(), true, getService().getChannels()).size();
+                                        int subPopOnly = populationSub - population;
+                                        if (Utils.hasSubChannels(parentChan.nChannelID, getService().getChannels())) {
+                                            parentPop.setText(String.format(Locale.ROOT, "(%d/%d)", population, subPopOnly));
+                                        } else {
+                                            parentPop.setText(String.format(Locale.ROOT, "(%d)", population));
+                                        }
+                                    } else {
+                                        parentPop.setText("");
+                                    }
+                                } else {
+                                    // Root level parent (Server Root) population display:
+                                    // Show users who are not in any channel (Channel ID 0)
+                                    int chan0Pop = Utils.getUsers(0, getService().getUsers()).size();
+                                    parentPop.setText(String.format(Locale.ROOT, "(%d)", chan0Pop));
+                                }
+                            } else {
+                                parentPop.setText("");
+                            }
+                        }
                         break;
 
-                    case CHANNEL_VIEW_TYPE :
+                    case CHANNEL_VIEW_TYPE:
                         if (convertView == null ||
                                 convertView.findViewById(R.id.channelname) == null)
                             convertView = inflater.inflate(R.layout.item_channel, parent, false);
@@ -1989,22 +2235,20 @@ private EditText newmsg;
                         TextView topic = convertView.findViewById(R.id.chantopic);
                         Button join = convertView.findViewById(R.id.join_btn);
                         int icon_resource = R.drawable.channel_orange;
-                        if(channel.bPassword) {
+                        if (channel.bPassword) {
                             icon_resource = R.drawable.channel_pink;
                             chanicon.setContentDescription(getString(R.string.text_passwdprot));
                             chanicon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
-                        }
-                        else {
+                        } else {
                             chanicon.setContentDescription(null);
                             chanicon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
                         }
                         chanicon.setImageResource(icon_resource);
 
-                        if(channel.nParentID == 0) {
+                        if (channel.nParentID == 0 && channel.nChannelID == getClient().getRootChannelID()) {
                             name.setText(R.string.init_channel);
-                        }
-                        else {
-                            if(channel.szName.trim().isEmpty())
+                        } else {
+                            if (channel.szName.trim().isEmpty())
                                 name.setText(R.string.no_name);
                             else
                                 name.setText(channel.szName);
@@ -2012,7 +2256,11 @@ private EditText newmsg;
                         topic.setText(channel.szTopic);
 
                         final boolean isMyChannel = channel.nChannelID == getClient().getMyChannelID();
-                        join.setText(isMyChannel ? R.string.action_leave : R.string.action_join);
+                        if (isMyChannel) {
+                            join.setText((channel.nParentID == 0) ? R.string.action_stay_server : R.string.action_leave);
+                        } else {
+                            join.setText(R.string.action_join);
+                        }
 
                         OnClickListener listener = v -> {
                             if (v.getId() == R.id.join_btn) {
@@ -2026,14 +2274,21 @@ private EditText newmsg;
 
                         join.setEnabled(true);
 
-                        if (channel.nMaxUsers > 0) {
-                            int population = Utils.getUsers(channel.nChannelID, getService().getUsers()).size();
-                            ((TextView)convertView.findViewById(R.id.population)).setText((population > 0) ? String.format(Locale.ROOT, "(%d)", population) : "");
+                        int population = Utils.getUsers(channel.nChannelID, getService().getUsers()).size();
+                        int populationSub = Utils.getUsers(channel.nChannelID, getService().getUsers(), true, getService().getChannels()).size();
+                        int subPopOnly = populationSub - population;
+                        TextView popView = convertView.findViewById(R.id.population);
+                        if (Utils.hasSubChannels(channel.nChannelID, getService().getChannels())) {
+                            popView.setText(String.format(Locale.ROOT, "(%d/%d)", population, subPopOnly));
+                        } else {
+                            popView.setText(String.format(Locale.ROOT, "(%d)", population));
                         }
 
+                        convertView.setTag(channel);
+                        ViewCompat.setAccessibilityDelegate(convertView, accessibilityAssistant);
                         break;
 
-                    case INFO_VIEW_TYPE :
+                    case INFO_VIEW_TYPE:
                         if (convertView == null ||
                                 convertView.findViewById(R.id.titletext) == null)
                             convertView = inflater.inflate(R.layout.item_info, parent, false);
@@ -2043,39 +2298,82 @@ private EditText newmsg;
                         details.setText(channel.szTopic);
                         break;
                 }
-            }
-            else if(item instanceof User user) {
+            } else if (item instanceof User user) {
                 if (convertView == null ||
-                    convertView.findViewById(R.id.nickname) == null)
+                        convertView.findViewById(R.id.nickname) == null)
                     convertView = inflater.inflate(R.layout.item_user, parent, false);
                 ImageView usericon = convertView.findViewById(R.id.usericon);
                 TextView nickname = convertView.findViewById(R.id.nickname);
                 TextView status = convertView.findViewById(R.id.status);
                 String name = Utils.getDisplayName(getBaseContext(), user);
-                if(name.trim().isEmpty())
-                    nickname.setText(R.string.no_name);
-                else
-                    nickname.setText(name);
-                status.setText(user.szStatusMsg);
+                boolean isAdmin = (user.uUserType & UserType.USERTYPE_ADMIN) != 0;
+                if (!isAdmin && user.nUserID == getClient().getMyUserID()) {
+                    UserAccount myAcc = new UserAccount();
+                    if (getClient().getMyUserAccount(myAcc)) {
+                        isAdmin = (myAcc.uUserType & UserType.USERTYPE_ADMIN) != 0;
+                    }
+                }
+                boolean isOperator = getClient().isChannelOperator(user.nUserID, user.nChannelID);
+                
+                if (name.trim().isEmpty())
+                    name = getString(R.string.no_name);
 
                 boolean selected = userIDS.contains(user.nUserID);
-                boolean isOperator = getClient().isChannelOperator(user.nUserID, user.nChannelID);
                 boolean talking = (user.uUserState & UserState.USERSTATE_VOICE) != 0;
                 boolean female = (user.nStatusMode & TeamTalkConstants.STATUSMODE_FEMALE) != 0;
                 boolean neutral = (user.nStatusMode & TeamTalkConstants.STATUSMODE_NEUTRAL) != 0;
                 boolean male = !female && !neutral;
-                boolean away =  (user.nStatusMode & TeamTalkConstants.STATUSMODE_AWAY) != 0;
+                boolean away = (user.nStatusMode & TeamTalkConstants.STATUSMODE_AWAY) != 0;
                 int icon_resource;
 
-                if(user.nUserID == getService().getTTInstance().getMyUserID()) {
+                if (user.nUserID == getService().getTTInstance().getMyUserID()) {
                     talking = getService().isVoiceTransmitting();
                 }
 
                 String move = selected ? getString(R.string.user_state_selected) : "";
-                String speaking = talking ? getString(R.string.user_state_now_speaking, name) : name;
-                String genderText = female ? getString(R.string.gender_female) : neutral ? getString(R.string.gender_neutral) : getString(R.string.gender_male);
-                String op = isOperator ? getString(R.string.user_state_operator) : "";
-                nickname.setContentDescription(getString(R.string.user_accessibility_desc, move, speaking, genderText, op));
+                String genderText = female ? getString(R.string.gender_female)
+                        : neutral ? getString(R.string.gender_neutral) : getString(R.string.gender_male);
+                
+                boolean isMedia = (user.nStatusMode & TeamTalkConstants.STATUSMODE_STREAM_MEDIAFILE) != 0 ||
+                        (user.nStatusMode & TeamTalkConstants.STATUSMODE_VIDEOTX) != 0 ||
+                        (user.nStatusMode & TeamTalkConstants.STATUSMODE_DESKTOP) != 0;
+
+                String statusText;
+                if ((user.nStatusMode & TeamTalkConstants.STATUSMODE_AWAY) != 0) {
+                    statusText = getString(R.string.status_away);
+                } else if ((user.nStatusMode & TeamTalkConstants.STATUSMODE_QUESTION) != 0) {
+                    statusText = getString(R.string.status_question);
+                } else {
+                    statusText = getString(R.string.status_online);
+                }
+
+                StringBuilder userDisplay = new StringBuilder(name);
+                if (user.szStatusMsg != null && !user.szStatusMsg.isEmpty()) {
+                    userDisplay.append(" - ").append(user.szStatusMsg).append(", ");
+                } else {
+                    userDisplay.append(", ");
+                }
+                userDisplay.append(statusText);
+                
+                if (isMedia) {
+                    userDisplay.append(", ").append(getString(R.string.state_transmitting_media));
+                }
+                
+                String adminLabel = isAdmin ? " (" + getString(R.string.usertype_admin) + ")" : "";
+                String opLabel = isOperator ? " (" + getString(R.string.usertype_operator) + ")" : "";
+                
+                String baseInfo = userDisplay.toString();
+                String finalText = baseInfo + ", " + genderText + adminLabel + opLabel;
+                
+                nickname.setText(finalText);
+                status.setVisibility(View.GONE);
+
+                String accOp = (isAdmin ? "(" + getString(R.string.usertype_admin) + ")" : "") + 
+                               (isAdmin && isOperator ? " " : "") + 
+                               (isOperator ? "(" + getString(R.string.usertype_operator) + ")" : "");
+                String speaking = talking ? getString(R.string.user_state_now_speaking, baseInfo) : baseInfo;
+                nickname.setContentDescription(
+                        getString(R.string.user_accessibility_desc, move, speaking, genderText, accOp));
 
                 if (talking) {
                     if (female) {
@@ -2095,7 +2393,9 @@ private EditText newmsg;
                     }
                 }
 
-                status.setContentDescription(away ? getString(R.string.user_status_fmt, getString(R.string.user_state_away), user.szStatusMsg) : null);
+                status.setContentDescription(away
+                        ? getString(R.string.user_status_fmt, getString(R.string.user_state_away), user.szStatusMsg)
+                        : null);
 
                 usericon.setImageResource(icon_resource);
                 usericon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -2108,57 +2408,269 @@ private EditText newmsg;
                     }
                 };
                 sndmsg.setOnClickListener(listener);
+
+                convertView.setTag(user);
+                ViewCompat.setAccessibilityDelegate(convertView, accessibilityAssistant);
+                return convertView;
             }
+
             return convertView;
         }
     }
 
     @Override
-    public void onItemClick(AdapterView< ? > l, View v, int position, long id) {
+    public void onItemClick(AdapterView<?> l, View v, int position, long id) {
 
-        if (channelsAdapter.getItemViewType(position) == ChannelListAdapter.PARENT_CHANNEL_VIEW_TYPE) {
-            // Check if we are at Root (Initial Channel)
-            if (curchannel != null && curchannel.nParentID == 0) {
-                 // Fall through to standard channel logic, which will set current channel to null (collapsing view)
-            }
-        }
-
-        Object item = l.getItemAtPosition(position);
-
-        if(item instanceof User user) {
+        Object item = channelsAdapter.getItem(position);
+        if (item instanceof User user) {
             Intent intent = new Intent(this, UserPropActivity.class);
-
+            // TODO: check 'curchannel' for null
             startActivityForResult(intent.putExtra(UserPropActivity.EXTRA_USERID, user.nUserID),
-                                   REQUEST_EDITUSER);
-        }
-        else if(item instanceof Channel channel) {
-
-            // Check if it's the ".." (Parent) item
-            if (channelsAdapter.getItemViewType(position) == ChannelListAdapter.PARENT_CHANNEL_VIEW_TYPE) {
-                // Determine parent channel to view
-                if (curchannel != null && curchannel.nParentID > 0) {
-                     Channel parentChan = getService().getChannels().get(curchannel.nParentID);
-                     setCurrentChannel(parentChan);
-                } else {
-                     setCurrentChannel(null); // Go to Root
-                }
-            }
-            else {
-                // Normal channel click -> View/Expand ONLY (Never Join automatically)
-                if(channel.nChannelID > 0) {
-                    setCurrentChannel(channel);
-                }
-                else {
-                    setCurrentChannel(null);
-                }
-            }
+                    REQUEST_EDITUSER);
+        } else if (item instanceof Channel channel) {
+            setCurrentChannel((channel.nChannelID > 0) ? channel : null);
             channelsAdapter.notifyDataSetChanged();
         }
     }
 
     Channel selectedChannel;
+    private void setSelectedChannel(Channel channel) {
+        selectedChannel = channel;
+        if (getService() != null && channel != null) {
+            getService().setMarkedChannelID(channel.nChannelID);
+        }
+    }
     User selectedUser;
     List<Integer> userIDS = new ArrayList<>();
+
+    public boolean handleUserAction(int resId, User selectedUser) {
+        if (selectedUser == null)
+            return false;
+        AlertDialog.Builder alert = new AlertDialog.Builder(this);
+        if (resId == R.string.info_copy_name) {
+            Utils.copyToClipboard(this, getString(R.string.label_user_name), selectedUser.szNickname);
+            return true;
+        } else if (resId == R.string.info_copy_id) {
+            Utils.copyToClipboard(this, getString(R.string.label_user_id), String.valueOf(selectedUser.nUserID));
+            return true;
+        } else if (resId == R.string.info_copy_ip) {
+            Utils.copyToClipboard(this, getString(R.string.label_user_ip), selectedUser.szIPAddress);
+            return true;
+        } else if (resId == R.string.action_edit_user) {
+            Intent intent = new Intent(MainActivity.this, UserPropActivity.class);
+            startActivityForResult(intent.putExtra(UserPropActivity.EXTRA_USERID, selectedUser.nUserID),
+                    REQUEST_EDITUSER);
+            return true;
+        } else if (resId == R.string.button_msg) {
+            Intent intent = new Intent(MainActivity.this, TextMessageActivity.class);
+            startActivity(intent.putExtra(TextMessageActivity.EXTRA_USERID, selectedUser.nUserID));
+            return true;
+        } else if (resId == R.string.action_make_operator || resId == R.string.action_revoke_operator) {
+            UserAccount myuseraccount = new UserAccount();
+            getClient().getMyUserAccount(myuseraccount);
+            boolean isOp = getClient().isChannelOperator(selectedUser.nUserID, selectedUser.nChannelID);
+            boolean operatorRight = getClient().isChannelOperator(getClient().getMyUserID(), selectedUser.nChannelID);
+            if (((myuseraccount.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN)
+                    || ((myuseraccount.uUserRights
+                            & UserRight.USERRIGHT_OPERATOR_ENABLE) != UserRight.USERRIGHT_NONE)
+                    || operatorRight) {
+                getClient().doChannelOp(selectedUser.nUserID, selectedUser.nChannelID, !isOp);
+                return true;
+            } else {
+                alert.setTitle(!isOp ? R.string.action_make_operator : R.string.action_revoke_operator);
+                alert.setMessage(R.string.text_operator_password);
+                final EditText input = new EditText(this);
+                input.setInputType(InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_CLASS_TEXT);
+                alert.setPositiveButton(android.R.string.yes,
+                        ((dialog, whichButton) -> getClient().doChannelOpEx(selectedUser.nUserID,
+                                selectedUser.nChannelID, input.getText().toString(), !isOp)));
+                alert.setNegativeButton(android.R.string.no, null);
+                alert.setView(input);
+                alert.show();
+                return true;
+            }
+        } else if (resId == R.string.action_kickchan) {
+            new AlertDialog.Builder(MainActivity.this)
+                    .setMessage(getString(R.string.kick_confirmation, selectedUser.szNickname))
+                    .setPositiveButton(android.R.string.yes,
+                            (dialog, which) -> getClient().doKickUser(selectedUser.nUserID, selectedUser.nChannelID))
+                    .setNegativeButton(android.R.string.no, null)
+                    .show();
+            return true;
+        } else if (resId == R.string.action_banchan) {
+            showBanDialog(selectedUser, true);
+            return true;
+        } else if (resId == R.string.action_kicksrv) {
+            new AlertDialog.Builder(MainActivity.this)
+                    .setMessage(getString(R.string.kick_confirmation, selectedUser.szNickname))
+                    .setPositiveButton(android.R.string.yes,
+                            (dialog, which) -> getClient().doKickUser(selectedUser.nUserID, 0))
+                    .setNegativeButton(android.R.string.no, null)
+                    .show();
+            return true;
+        } else if (resId == R.string.action_bansrv) {
+            showBanDialog(selectedUser, false);
+            return true;
+        } else if (resId == R.string.action_transmission_control) {
+            showTransmissionControlDialog(selectedUser);
+            return true;
+        } else if (resId == R.string.action_subscriptions) {
+            showSubscriptionsDialog(selectedUser);
+            return true;
+        }
+        return false;
+    }
+
+    private void showBanDialog(final User user, final boolean fromChannel) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.ban_confirmation_title);
+
+        View view = getLayoutInflater().inflate(R.layout.dialog_ban_user, null);
+        TextView textMsg = view.findViewById(R.id.text_ban_confirmation);
+        Spinner spinner = view.findViewById(R.id.spinner_ban_type);
+
+        textMsg.setText(getString(R.string.ban_confirmation, user.szNickname));
+
+        String[] options = {
+                getString(R.string.action_ban_type_account),
+                getString(R.string.action_ban_type_ip),
+                getString(R.string.action_ban_type_both)
+        };
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, options);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+
+        builder.setView(view);
+        builder.setPositiveButton(android.R.string.yes, (dialog, which) -> {
+            int selected = spinner.getSelectedItemPosition();
+            int channelBit = fromChannel ? BanType.BANTYPE_CHANNEL : 0;
+            
+            if (selected == 2) {
+                // Ban by both: send two separate commands to ensure compatibility
+                getClient().doBanUserEx(user.nUserID, BanType.BANTYPE_USERNAME | channelBit);
+                getClient().doBanUserEx(user.nUserID, BanType.BANTYPE_IPADDR | channelBit);
+            } else {
+                int banTypes = (selected == 0) ? BanType.BANTYPE_USERNAME : BanType.BANTYPE_IPADDR;
+                getClient().doBanUserEx(user.nUserID, banTypes | channelBit);
+            }
+        });
+        builder.setNegativeButton(android.R.string.no, null);
+        builder.show();
+    }
+
+    public boolean handleChannelAction(int resId, Channel channel) {
+        if (channel == null)
+            return false;
+        if (resId == R.string.action_new_channel) {
+            Intent intent = new Intent(MainActivity.this, dk.bearware.gui.ChannelPropActivity.class);
+            intent.putExtra(dk.bearware.gui.ChannelPropActivity.EXTRA_PARENTID, channel.nChannelID);
+            startActivityForResult(intent, REQUEST_NEWCHANNEL);
+            return true;
+        } else if (resId == R.string.title_activity_channel_prop) {
+            Intent intent = new Intent(MainActivity.this, dk.bearware.gui.ChannelPropActivity.class);
+            intent.putExtra(dk.bearware.gui.ChannelPropActivity.EXTRA_CHANNELID, channel.nChannelID);
+            startActivity(intent);
+            return true;
+        } else if (resId == R.string.action_delete) {
+            new AlertDialog.Builder(MainActivity.this)
+                    .setTitle(R.string.dialog_confirm_delete)
+                    .setMessage(getString(R.string.channel_remove_confirmation, channel.szName))
+                    .setPositiveButton(android.R.string.yes, (dialog, which) -> {
+                        if (getClient().doRemoveChannel(channel.nChannelID) <= 0)
+                            Toast.makeText(MainActivity.this,
+                                    getString(R.string.err_channel_remove, channel.szName),
+                                    Toast.LENGTH_LONG).show();
+                    })
+                    .setNegativeButton(android.R.string.no, null)
+                    .show();
+            return true;
+        } else if (resId == R.string.action_join) {
+            joinChannel(channel);
+            return true;
+        } else if (resId == R.string.action_move) {
+            for (Integer uid : userIDS) {
+                getClient().doMoveUser(uid, channel.nChannelID);
+            }
+            userIDS.clear();
+            return true;
+        } else if (resId == R.string.action_banned_users) {
+            Intent intent = new Intent(MainActivity.this, dk.bearware.gui.ChannelBannedUsersActivity.class);
+            intent.putExtra("channel_id", channel.nChannelID);
+            startActivity(intent);
+            return true;
+        } else if (resId == R.string.action_share_channel) {
+            shareChannel(channel);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_ENTER && event.isAltPressed()) {
+            if (listChannels != null) {
+                int position = listChannels.getSelectedItemPosition();
+                if (position != AdapterView.INVALID_POSITION) {
+                    onItemClick(listChannels, listChannels.getSelectedView(), position, listChannels.getItemIdAtPosition(position));
+                    return true;
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    private void shareChannel(Channel channel) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.dialog_share_channel_title);
+
+        View view = getLayoutInflater().inflate(R.layout.dialog_share_channel, null);
+        final EditText editUser = view.findViewById(R.id.edit_share_username);
+        final EditText editPass = view.findViewById(R.id.edit_share_password);
+        final CheckBox chkShowPass = view.findViewById(R.id.chk_share_show_password);
+
+        ServerEntry server = getService().getServerEntry();
+        if (server != null) {
+            editUser.setText(server.username);
+            editPass.setText(server.password);
+        }
+
+        chkShowPass.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                editPass.setInputType(InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+            } else {
+                editPass.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            }
+            editPass.setSelection(editPass.getText().length());
+        });
+
+        final TextView textLink = view.findViewById(R.id.text_share_link);
+        final Button btnCopy = view.findViewById(R.id.btn_share_copy);
+        final String path = Utils.getChannelPath(channel.nChannelID, getService().getChannels());
+
+        android.text.TextWatcher watcher = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable s) {
+                String u = editUser.getText().toString();
+                String p = editPass.getText().toString();
+                textLink.setText(Utils.generateTTLink(server, u, p, path));
+            }
+        };
+        editUser.addTextChangedListener(watcher);
+        editPass.addTextChangedListener(watcher);
+        
+        // Initial text
+        textLink.setText(Utils.generateTTLink(server, server != null ? server.username : "", server != null ? server.password : "", path));
+
+        btnCopy.setOnClickListener(v -> {
+            Utils.copyToClipboard(MainActivity.this, getString(R.string.tag_clipboard), textLink.getText().toString());
+            Toast.makeText(MainActivity.this, R.string.msg_link_copied, Toast.LENGTH_SHORT).show();
+        });
+
+        builder.setView(view);
+        builder.setPositiveButton(android.R.string.ok, null);
+        builder.show();
+    }
 
     @Override
     public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
@@ -2177,84 +2689,53 @@ private EditText newmsg;
 
             androidx.appcompat.widget.PopupMenu popup = new androidx.appcompat.widget.PopupMenu(this, view);
 
-            popup.getMenu().add(getString(R.string.info_copy_name)).setOnMenuItemClickListener(menuItem -> {
-                Utils.copyToClipboard(this, getString(R.string.label_user_name), user.szNickname);
-                return true;
-            });
-            popup.getMenu().add(getString(R.string.info_copy_id)).setOnMenuItemClickListener(menuItem -> {
-                Utils.copyToClipboard(this, getString(R.string.label_user_id), String.valueOf(user.nUserID));
-                return true;
-            });
-            popup.getMenu().add(getString(R.string.info_copy_ip)).setOnMenuItemClickListener(menuItem -> {
-                Utils.copyToClipboard(this, getString(R.string.label_user_ip), user.szIPAddress);
-                return true;
-            });
-
-            popup.getMenu().add(R.string.action_edit_user).setOnMenuItemClickListener(menuItem -> {
-                Intent intent = new Intent(MainActivity.this, UserPropActivity.class);
-                startActivityForResult(intent.putExtra(UserPropActivity.EXTRA_USERID, user.nUserID),
-                                       REQUEST_EDITUSER);
-                return true;
-            });
-
-            popup.getMenu().add(R.string.button_msg).setOnMenuItemClickListener(menuItem -> {
-                Intent intent = new Intent(MainActivity.this, TextMessageActivity.class);
-                startActivity(intent.putExtra(TextMessageActivity.EXTRA_USERID, user.nUserID));
-                return true;
-            });
+            popup.getMenu().add(getString(R.string.info_copy_name))
+                    .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.info_copy_name, user));
+            popup.getMenu().add(getString(R.string.info_copy_id))
+                    .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.info_copy_id, user));
+            popup.getMenu().add(getString(R.string.info_copy_ip))
+                    .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.info_copy_ip, user));
+            popup.getMenu().add(R.string.action_edit_user)
+                    .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.action_edit_user, user));
+            popup.getMenu().add(R.string.button_msg)
+                    .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.button_msg, user));
+            popup.getMenu().add(R.string.action_subscriptions)
+                    .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.action_subscriptions, user));
+            popup.getMenu().add(R.string.action_transmission_control)
+                    .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.action_transmission_control, user));
 
             UserAccount myuseraccount = new UserAccount();
             getClient().getMyUserAccount(myuseraccount);
-            boolean kickRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_KICK_USERS) != UserRight.USERRIGHT_NONE;
+            boolean kickRight = (myuseraccount.uUserRights
+                    & UserRight.USERRIGHT_KICK_USERS) != UserRight.USERRIGHT_NONE;
             boolean banRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_BAN_USERS) != UserRight.USERRIGHT_NONE;
             boolean operatorRight = getClient().isChannelOperator(getClient().getMyUserID(), user.nChannelID);
 
-            if (((myuseraccount.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN) || ((myuseraccount.uUserRights & UserRight.USERRIGHT_OPERATOR_ENABLE) != UserRight.USERRIGHT_NONE)) {
-                 boolean isOp = getClient().isChannelOperator(user.nUserID, user.nChannelID);
-                 popup.getMenu().add(isOp ? R.string.action_revoke_operator : R.string.action_make_operator).setOnMenuItemClickListener(menuItem -> {
-                     getClient().doChannelOp(user.nUserID, user.nChannelID, !isOp);
-                     return true;
-                 });
-            } else {
-                 boolean isOp = getClient().isChannelOperator(user.nUserID, user.nChannelID);
-                 popup.getMenu().add(isOp ? R.string.action_revoke_operator : R.string.action_make_operator).setOnMenuItemClickListener(menuItem -> {
-                     AlertDialog.Builder alert = new AlertDialog.Builder(this);
-                     alert.setTitle(isOp ? R.string.action_revoke_operator : R.string.action_make_operator);
-                     alert.setMessage(R.string.text_operator_password);
-                     final EditText input = new EditText(this);
-                     input.setInputType(InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_CLASS_TEXT);
-                     alert.setPositiveButton(android.R.string.yes, ((dialog, whichButton) -> getClient().doChannelOpEx(user.nUserID, user.nChannelID, input.getText().toString(), !isOp)));
-                     alert.setNegativeButton(android.R.string.no, null);
-                     alert.setView(input);
-                     alert.show();
-                     return true;
-                 });
+            if (user.nChannelID != 0 && (((myuseraccount.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN)
+                    || ((myuseraccount.uUserRights
+                            & UserRight.USERRIGHT_OPERATOR_ENABLE) != UserRight.USERRIGHT_NONE)
+                    || operatorRight)) {
+                boolean isOp = getClient().isChannelOperator(user.nUserID, user.nChannelID);
+                popup.getMenu().add(isOp ? R.string.action_revoke_operator : R.string.action_make_operator)
+                        .setOnMenuItemClickListener(menuItem -> handleUserAction(
+                                isOp ? R.string.action_revoke_operator : R.string.action_make_operator, user));
             }
 
             if (kickRight || operatorRight) {
-                popup.getMenu().add(R.string.action_kickchan).setOnMenuItemClickListener(menuItem -> {
-                    getClient().doKickUser(user.nUserID, user.nChannelID);
-                    return true;
-                });
+                popup.getMenu().add(R.string.action_kickchan)
+                        .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.action_kickchan, user));
             }
             if (banRight || operatorRight) {
-                popup.getMenu().add(R.string.action_banchan).setOnMenuItemClickListener(menuItem -> {
-                    getClient().doBanUser(user.nUserID, user.nChannelID);
-                    return true;
-                });
+                popup.getMenu().add(R.string.action_banchan)
+                        .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.action_banchan, user));
             }
-
             if (kickRight) {
-                popup.getMenu().add(R.string.action_kicksrv).setOnMenuItemClickListener(menuItem -> {
-                    getClient().doKickUser(user.nUserID, 0);
-                    return true;
-                });
+                popup.getMenu().add(R.string.action_kicksrv)
+                        .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.action_kicksrv, user));
             }
             if (banRight) {
-                popup.getMenu().add(R.string.action_bansrv).setOnMenuItemClickListener(menuItem -> {
-                    getClient().doBanUser(user.nUserID, 0);
-                    return true;
-                });
+                popup.getMenu().add(R.string.action_bansrv)
+                        .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.action_bansrv, user));
             }
 
             popup.show();
@@ -2263,62 +2744,51 @@ private EditText newmsg;
 
         else if (item instanceof Channel) {
             final Channel channel = (Channel) item;
-            selectedChannel = channel;
+            setSelectedChannel(channel);
 
             androidx.appcompat.widget.PopupMenu popup = new androidx.appcompat.widget.PopupMenu(this, view);
 
             UserAccount myuseraccount = new UserAccount();
             getClient().getMyUserAccount(myuseraccount);
-            boolean chanRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_MODIFY_CHANNELS) != UserRight.USERRIGHT_NONE;
-            boolean tempChanRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL) != UserRight.USERRIGHT_NONE;
+            boolean chanRight = (myuseraccount.uUserRights
+                    & UserRight.USERRIGHT_MODIFY_CHANNELS) != UserRight.USERRIGHT_NONE;
+            boolean tempChanRight = (myuseraccount.uUserRights
+                    & UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL) != UserRight.USERRIGHT_NONE;
 
             if (chanRight || tempChanRight) {
 
-                popup.getMenu().add(R.string.action_new_channel).setOnMenuItemClickListener(menuItem -> {
-                    Intent intent = new Intent(MainActivity.this, dk.bearware.gui.ChannelPropActivity.class);
-                    intent.putExtra(dk.bearware.gui.ChannelPropActivity.EXTRA_PARENTID, channel.nChannelID);
-                    startActivityForResult(intent, REQUEST_NEWCHANNEL);
-                    return true;
-                });
+                popup.getMenu().add(R.string.action_new_channel).setOnMenuItemClickListener(
+                        menuItem -> handleChannelAction(R.string.action_new_channel, channel));
 
-                popup.getMenu().add(R.string.title_activity_channel_prop).setOnMenuItemClickListener(menuItem -> {
-                    Intent intent = new Intent(MainActivity.this, dk.bearware.gui.ChannelPropActivity.class);
-                    intent.putExtra(dk.bearware.gui.ChannelPropActivity.EXTRA_CHANNELID, channel.nChannelID);
-                    startActivity(intent);
-                    return true;
-                });
+                popup.getMenu().add(R.string.title_activity_channel_prop).setOnMenuItemClickListener(
+                        menuItem -> handleChannelAction(R.string.title_activity_channel_prop, channel));
+
+                popup.getMenu().add(R.string.action_delete)
+                        .setOnMenuItemClickListener(menuItem -> handleChannelAction(R.string.action_delete, channel));
             }
 
-            popup.getMenu().add(getString(R.string.action_join)).setOnMenuItemClickListener(menuItem -> {
-                joinChannel(channel);
-                return true;
-            });
+            popup.getMenu().add(getString(R.string.action_join))
+                    .setOnMenuItemClickListener(menuItem -> handleChannelAction(R.string.action_join, channel));
 
             getClient().getMyUserAccount(myuseraccount);
-            boolean moveRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_MOVE_USERS) != UserRight.USERRIGHT_NONE;
-             if(moveRight && !userIDS.isEmpty()) {
-                  popup.getMenu().add(R.string.action_move).setOnMenuItemClickListener(menuItem -> {
+            boolean moveRight = (myuseraccount.uUserRights
+                    & UserRight.USERRIGHT_MOVE_USERS) != UserRight.USERRIGHT_NONE;
+            if (moveRight && !userIDS.isEmpty()) {
+                popup.getMenu().add(R.string.action_move)
+                        .setOnMenuItemClickListener(menuItem -> handleChannelAction(R.string.action_move, channel));
+            }
 
-                      for(Integer uid : userIDS) {
-                          getClient().doMoveUser(uid, channel.nChannelID);
-                      }
-                      userIDS.clear();
-                      return true;
-                  });
-             }
+            // Add Banned Users option
+            boolean banRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_BAN_USERS) != UserRight.USERRIGHT_NONE;
+            boolean operatorRight = getClient().isChannelOperator(getClient().getMyUserID(), channel.nChannelID);
 
-             // Add Banned Users option
-             boolean banRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_BAN_USERS) != UserRight.USERRIGHT_NONE;
-             boolean operatorRight = getClient().isChannelOperator(getClient().getMyUserID(), channel.nChannelID);
+            if (banRight || operatorRight) {
+                popup.getMenu().add(R.string.action_banned_users).setOnMenuItemClickListener(
+                        menuItem -> handleChannelAction(R.string.action_banned_users, channel));
+            }
 
-             if (banRight || operatorRight) {
-                 popup.getMenu().add(R.string.action_banned_users).setOnMenuItemClickListener(menuItem -> {
-                     Intent intent = new Intent(MainActivity.this, dk.bearware.gui.ChannelBannedUsersActivity.class);
-                     intent.putExtra("channel_id", channel.nChannelID);
-                     startActivity(intent);
-                     return true;
-                 });
-             }
+            popup.getMenu().add(R.string.action_share_channel).setOnMenuItemClickListener(
+                    menuItem -> handleChannelAction(R.string.action_share_channel, channel));
 
             popup.show();
             return true;
@@ -2330,106 +2800,100 @@ private EditText newmsg;
     @Override
     public boolean onMenuItemClick(MenuItem item) {
         AlertDialog.Builder alert = new AlertDialog.Builder(this);
-        switch (item.getItemId()) {
-        case R.id.action_banchan:
+        if (item.getItemId() == R.id.action_banchan) {
             alert.setMessage(getString(R.string.ban_confirmation, selectedUser.szNickname));
             alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) -> {
                 getClient().doBanUser(selectedUser.nUserID, selectedUser.nChannelID);
                 getClient().doKickUser(selectedUser.nUserID, selectedUser.nChannelID);
             });
-
             alert.setNegativeButton(android.R.string.no, null);
             alert.show();
-            break;
-        case R.id.action_bansrv:
+        } else if (item.getItemId() == R.id.action_bansrv) {
             alert.setMessage(getString(R.string.ban_confirmation, selectedUser.szNickname));
             alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) -> {
                 getClient().doBanUser(selectedUser.nUserID, 0);
                 getClient().doKickUser(selectedUser.nUserID, 0);
             });
-
             alert.setNegativeButton(android.R.string.no, null);
             alert.show();
-            break;
-        case R.id.action_edit:
+        } else if (item.getItemId() == R.id.action_edit) {
             editChannelProperties(selectedChannel);
-            break;
-        case R.id.action_edituser: {
-            Intent intent = new Intent(this, UserPropActivity.class);
-            startActivityForResult(intent.putExtra(UserPropActivity.EXTRA_USERID, selectedUser.nUserID),
-                                   REQUEST_EDITUSER);
-        }
-        break;
-        case R.id.action_message: {
-            Intent intent = new Intent(MainActivity.this, TextMessageActivity.class);
-            startActivity(intent.putExtra(TextMessageActivity.EXTRA_USERID, selectedUser.nUserID));
-        }
-        break;
-        case R.id.action_kickchan:
+        } else if (item.getItemId() == R.id.action_edituser) {
+            {
+                Intent intent = new Intent(this, UserPropActivity.class);
+                startActivityForResult(intent.putExtra(UserPropActivity.EXTRA_USERID, selectedUser.nUserID),
+                        REQUEST_EDITUSER);
+            }
+        } else if (item.getItemId() == R.id.action_message) {
+            {
+                Intent intent = new Intent(MainActivity.this, TextMessageActivity.class);
+                startActivity(intent.putExtra(TextMessageActivity.EXTRA_USERID, selectedUser.nUserID));
+            }
+        } else if (item.getItemId() == R.id.action_kickchan) {
             alert.setMessage(getString(R.string.kick_confirmation, selectedUser.szNickname));
-            alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) -> getClient().doKickUser(selectedUser.nUserID, selectedUser.nChannelID));
-
+            alert.setPositiveButton(android.R.string.yes,
+                    (dialog, whichButton) -> getClient().doKickUser(selectedUser.nUserID, selectedUser.nChannelID));
             alert.setNegativeButton(android.R.string.no, null);
             alert.show();
-            break;
-        case R.id.action_kicksrv:
+        } else if (item.getItemId() == R.id.action_kicksrv) {
             alert.setMessage(getString(R.string.kick_confirmation, selectedUser.szNickname));
-            alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) -> getClient().doKickUser(selectedUser.nUserID, 0));
-
+            alert.setPositiveButton(android.R.string.yes,
+                    (dialog, whichButton) -> getClient().doKickUser(selectedUser.nUserID, 0));
             alert.setNegativeButton(android.R.string.no, null);
             alert.show();
-            break;
-            case R.id.action_makeop:
-                UserAccount myuseraccount = new UserAccount();
-                getClient().getMyUserAccount(myuseraccount);
-                if (((myuseraccount.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN) || ((myuseraccount.uUserRights & UserRight.USERRIGHT_OPERATOR_ENABLE) != UserRight.USERRIGHT_NONE)) {
-                    getClient().doChannelOp(selectedUser.nUserID, selectedUser.nChannelID, !getClient().isChannelOperator(selectedUser.nUserID, selectedUser.nChannelID));
-                    break;
-                }
-                alert.setTitle(getClient().isChannelOperator(selectedUser.nUserID , selectedUser.nChannelID) ? R.string.action_revoke_operator : R.string.action_make_operator);
-                alert.setMessage(R.string.text_operator_password);
-                final EditText input = new EditText(this);
-                input.setInputType(InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_CLASS_TEXT);
-                alert.setPositiveButton(android.R.string.yes, ((dialog, whichButton) -> getClient().doChannelOpEx(selectedUser.nUserID, selectedUser.nChannelID, input.getText().toString(), !getClient().isChannelOperator(selectedUser.nUserID, selectedUser.nChannelID))));
-                alert.setNegativeButton(android.R.string.no, null);
-                alert.setView(input);
-                alert.show();
-                break;
-        case R.id.action_move:
+        } else if (item.getItemId() == R.id.action_makeop) {
+            UserAccount myuseraccount = new UserAccount();
+            getClient().getMyUserAccount(myuseraccount);
+            if (((myuseraccount.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN)
+                    || ((myuseraccount.uUserRights
+                            & UserRight.USERRIGHT_OPERATOR_ENABLE) != UserRight.USERRIGHT_NONE)) {
+                getClient().doChannelOp(selectedUser.nUserID, selectedUser.nChannelID,
+                        !getClient().isChannelOperator(selectedUser.nUserID, selectedUser.nChannelID));
+            }
+            alert.setTitle(getClient().isChannelOperator(selectedUser.nUserID, selectedUser.nChannelID)
+                    ? R.string.action_revoke_operator
+                    : R.string.action_make_operator);
+            alert.setMessage(R.string.text_operator_password);
+            final EditText input = new EditText(this);
+            input.setInputType(InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_CLASS_TEXT);
+            alert.setPositiveButton(android.R.string.yes,
+                    ((dialog, whichButton) -> getClient().doChannelOpEx(selectedUser.nUserID, selectedUser.nChannelID,
+                            input.getText().toString(),
+                            !getClient().isChannelOperator(selectedUser.nUserID, selectedUser.nChannelID))));
+            alert.setNegativeButton(android.R.string.no, null);
+            alert.setView(input);
+            alert.show();
+        } else if (item.getItemId() == R.id.action_move) {
             for (Integer userID : userIDS) {
                 getClient().doMoveUser(userID, selectedChannel.nChannelID);
             }
             userIDS.clear();
-            break;
-        case R.id.action_select:
-    if (userIDS.contains(selectedUser.nUserID)) {
-        userIDS.remove((Integer) selectedUser.nUserID);
-    } else {
-        userIDS.add(selectedUser.nUserID);
-    }
-    accessibilityAssistant.lockEvents();
-    channelsAdapter.notifyDataSetChanged();
-    accessibilityAssistant.unlockEvents();
-    break;
-        case R.id.action_remove: {
-            alert.setMessage(getString(R.string.channel_remove_confirmation, selectedChannel.szName));
-            alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) -> {
-                if (getClient().doRemoveChannel(selectedChannel.nChannelID) <= 0)
-                    Toast.makeText(MainActivity.this,
-                                   getString(R.string.err_channel_remove,
-                                             selectedChannel.szName),
-                                   Toast.LENGTH_LONG).show();
-            });
-
-            alert.setNegativeButton(android.R.string.no, null);
-            alert.show();
-            break;
-        }
-        case R.id.action_settings:
-            startActivity(new Intent(this, PreferencesActivity.class));
+        } else if (item.getItemId() == R.id.action_select) {
+            if (userIDS.contains(selectedUser.nUserID)) {
+                userIDS.remove((Integer) selectedUser.nUserID);
+            } else {
+                userIDS.add(selectedUser.nUserID);
+            }
+            accessibilityAssistant.lockEvents();
+            channelsAdapter.notifyDataSetChanged();
+            accessibilityAssistant.unlockEvents();
+        } else if (item.getItemId() == R.id.action_remove) {
+            {
+                alert.setMessage(getString(R.string.channel_remove_confirmation, selectedChannel.szName));
+                alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) -> {
+                    if (getClient().doRemoveChannel(selectedChannel.nChannelID) <= 0)
+                        Toast.makeText(MainActivity.this,
+                                getString(R.string.err_channel_remove,
+                                        selectedChannel.szName),
+                                Toast.LENGTH_LONG).show();
+                });
+                alert.setNegativeButton(android.R.string.no, null);
+                alert.show();
+            }
+        } else if (item.getItemId() == R.id.action_settings) {
+            startActivityForResult(new Intent(this, PreferencesActivity.class), REQUEST_SETTINGS);
             return true;
-
-        default:
+        } else {
             return false;
         }
         return true;
@@ -2437,13 +2901,9 @@ private EditText newmsg;
 
     @SuppressWarnings("deprecation")
     private void adjustSoundSystem() {
-        if (audioManager.isBluetoothA2dpOn())
-            return;
-        boolean voiceProcessing = prefs.get(Preferences.PREF_SOUNDSYSTEM_VOICEPROCESSING, false);
-        audioManager.setMode(voiceProcessing ?
-                AudioManager.MODE_IN_COMMUNICATION : AudioManager.MODE_NORMAL);
-        if (voiceProcessing)
-            audioManager.setSpeakerphoneOn(prefs.get(Preferences.PREF_SOUNDSYSTEM_SPEAKERPHONE, false) && !audioManager.isWiredHeadsetOn());
+        if (getService() != null) {
+            getService().updateAudioRouting();
+        }
     }
 
     private void adjustMuteButton(ImageButton btn) {
@@ -2469,19 +2929,19 @@ private EditText newmsg;
         TextView micLevel = findViewById(R.id.miclevel_text);
 
         if (voiceActivationEnabled) {
-            micLevel.setText(level + "%");
+            micLevel.setText(level + getString(R.string.unit_percent));
             micLevel.setContentDescription(getString(R.string.vox_level_description, micLevel.getText().toString()));
             voxSwitch.setImageResource(R.drawable.microphone);
             voxSwitch.setContentDescription(getString(R.string.voice_activation_off));
             ((SeekBar) findViewById(R.id.mic_gainSeekBar)).setProgress(getClient().getVoiceActivationLevel());
             findViewById(R.id.mic_gainSeekBar).setContentDescription(getString(R.string.voxlevel));
-        }
-        else {
-            micLevel.setText(Utils.refVolumeToPercent(level) + "%");
+        } else {
+            micLevel.setText(Utils.refGainToPercent(level) + getString(R.string.unit_percent));
             micLevel.setContentDescription(getString(R.string.mic_gain_description, micLevel.getText().toString()));
             voxSwitch.setImageResource(R.drawable.mic_green);
             voxSwitch.setContentDescription(getString(R.string.voice_activation_on));
-            ((SeekBar) findViewById(R.id.mic_gainSeekBar)).setProgress(Utils.refVolumeToPercent(getClient().getSoundInputGainLevel()));
+            ((SeekBar) findViewById(R.id.mic_gainSeekBar))
+                    .setProgress(Utils.refGainToPercent(getClient().getSoundInputGainLevel()));
             findViewById(R.id.mic_gainSeekBar).setContentDescription(getString(R.string.micgain));
         }
     }
@@ -2490,7 +2950,8 @@ private EditText newmsg;
         accessibilityAssistant.lockEvents();
 
         findViewById(R.id.transmit_voice).setBackgroundColor(txEnabled ? Color.GREEN : Color.RED);
-        findViewById(R.id.transmit_voice).setContentDescription(txEnabled ? getString(R.string.tx_on) : getString(R.string.tx_off));
+        findViewById(R.id.transmit_voice)
+                .setContentDescription(txEnabled ? getString(R.string.tx_on) : getString(R.string.tx_off));
 
         if ((curchannel != null) && (getClient().getMyChannelID() == curchannel.nChannelID))
             channelsAdapter.notifyDataSetChanged();
@@ -2500,7 +2961,8 @@ private EditText newmsg;
 
     private void adjustVoiceGain() {
 
-        boolean showMicSeekBar = mychannel == null || !mychannel.audiocfg.bEnableAGC ||  getService().isVoiceActivationEnabled();
+        boolean showMicSeekBar = mychannel == null || !mychannel.audiocfg.bEnableAGC
+                || getService().isVoiceActivationEnabled();
 
         findViewById(R.id.mic_gainSeekBar).setVisibility(showMicSeekBar ? View.VISIBLE : View.GONE);
     }
@@ -2511,7 +2973,8 @@ private EditText newmsg;
     private void setupButtons() {
 
         final Button tx_btn = findViewById(R.id.transmit_voice);
-        tx_btn.setAccessibilityDelegate(accessibilityAssistant);
+        tx_btn.setOnClickListener(v -> toggleVoiceTransmission());
+        ViewCompat.setAccessibilityDelegate(tx_btn, accessibilityAssistant);
 
         OnButtonInteractionListener txButtonListener = new OnButtonInteractionListener() {
 
@@ -2522,14 +2985,13 @@ private EditText newmsg;
             public boolean onTouch(View v, MotionEvent event) {
                 boolean tx = event.getAction() != MotionEvent.ACTION_UP;
 
-                if(tx != tx_state) {
+                if (tx != tx_state) {
 
-                    if(!tx) {
-                        if(System.currentTimeMillis() - tx_down_start < 800) {
+                    if (!tx) {
+                        if (System.currentTimeMillis() - tx_down_start < 800) {
                             tx = true;
                             tx_down_start = 0;
-                        }
-                        else {
+                        } else {
                             tx_down_start = System.currentTimeMillis();
                         }
 
@@ -2545,11 +3007,10 @@ private EditText newmsg;
 
             @Override
             public void onClick(View v) {
-                if(System.currentTimeMillis() - tx_down_start < 800) {
+                if (System.currentTimeMillis() - tx_down_start < 800) {
                     tx_state = true;
                     tx_down_start = 0;
-                }
-                else {
+                } else {
                     tx_state = false;
                     tx_down_start = System.currentTimeMillis();
                 }
@@ -2580,24 +3041,27 @@ private EditText newmsg;
                     int outputVolume = Utils.refVolume(progress);
                     getClient().setSoundOutputVolume(outputVolume);
                     prefs.put(Preferences.PREF_SOUNDSYSTEM_MASTERVOLUME, outputVolume);
-                    volLevel.setText(progress + "%");
-                    volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText().toString()));
-            }     else if (seekBar == micSeekBar) {
+                    volLevel.setText(progress + getString(R.string.unit_percent));
+                    volLevel.setContentDescription(
+                            getString(R.string.speaker_volume_description, volLevel.getText().toString()));
+                } else if (seekBar == micSeekBar) {
                     if (getService().isVoiceActivationEnabled()) {
                         int voxLevel = progress;
                         getClient().setVoiceActivationLevel(voxLevel);
                         prefs.put(Preferences.PREF_SOUNDSYSTEM_VOICEACTIVATION_LEVEL, voxLevel);
-                        micLevel.setText(progress + "%");
-                        micLevel.setContentDescription(getString(R.string.vox_level_description, micLevel.getText().toString()));
+                        micLevel.setText(progress + getString(R.string.unit_percent));
+                        micLevel.setContentDescription(
+                                getString(R.string.vox_level_description, micLevel.getText().toString()));
                     } else {
                         int inputGain = Utils.refGain(progress);
                         getClient().setSoundInputGainLevel(inputGain);
                         prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, inputGain);
-                        micLevel.setText(progress + "%");
-                        micLevel.setContentDescription(getString(R.string.mic_gain_description, micLevel.getText().toString()));
+                        micLevel.setText(progress + getString(R.string.unit_percent));
+                        micLevel.setContentDescription(
+                                getString(R.string.mic_gain_description, micLevel.getText().toString()));
                     }
                 }
-        }
+            }
 
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
@@ -2623,34 +3087,21 @@ private EditText newmsg;
                     Log.d(TAG, "Mute enabled");
                     // Play mute sound if enabled
                     if (prefs.get("mute_all_audio_icon", true)) {
-                        Integer soundId = sounds.get(SOUND_MUTEALL);
-                        Log.d(TAG, "Playing mute sound. SoundID: " + soundId);
-                        if (soundId != null && soundId != 0) {
-                            audioIcons.play(soundId, 1.0f, 1.0f, 0, 0, 1.0f);
-                        } else {
-                            Log.w(TAG, "Mute sound not found or not loaded");
-                        }
+                        playSound(SOUND_MUTEALL);
                     }
                 } else {
                     Log.d(TAG, "Mute disabled");
                     // Play unmute sound if enabled
-                     if (prefs.get("mute_all_audio_icon", true)) {
-                        Integer soundId = sounds.get(SOUND_UNMUTEALL);
-                        Log.d(TAG, "Playing unmute sound. SoundID: " + soundId);
-                        if (soundId != null && soundId != 0) {
-                            audioIcons.play(soundId, 1.0f, 1.0f, 0, 0, 1.0f);
-                        } else {
-                            Log.w(TAG, "Unmute sound not found or not loaded");
-                        }
+                    if (prefs.get("mute_all_audio_icon", true)) {
+                        playSound(SOUND_UNMUTEALL);
                     }
                 }
                 adjustMuteButton((ImageButton) v);
 
-                int level = getService().isMute() ?
-                    0 :
-                    Utils.refVolumeToPercent(getClient().getSoundOutputVolume());
-                volLevel.setText(level + "%");
-                volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText().toString()));
+                int level = getService().isMute() ? 0 : Utils.refVolumeToPercent(getClient().getSoundOutputVolume());
+                volLevel.setText(level + getString(R.string.unit_percent));
+                volLevel.setContentDescription(
+                        getString(R.string.speaker_volume_description, volLevel.getText().toString()));
             }
         });
 
@@ -2667,12 +3118,16 @@ private EditText newmsg;
     }
 
     private void initializeTeamTalkService(TeamTalkService service) {
-
+        this.ttsWrapper = service.getTTSWrapper();
         this.users = new HashMap<>(service.getUsers());
 
         int mychanid = getClient().getMyChannelID();
         if (mychanid > 0) {
-            setCurrentChannel(service.getChannels().get(mychanid));
+            Channel mychan = service.getChannels().get(mychanid);
+            setSelectedChannel(mychan);
+            if (curchannel == null) {
+                setCurrentChannel(mychan);
+            }
         }
 
         setMyChannel(service.getChannels().get(mychanid));
@@ -2779,10 +3234,10 @@ private EditText newmsg;
         if (service.isVoiceActivationEnabled()) {
             micSeekBar.setProgress(getClient().getVoiceActivationLevel());
         } else {
-            micSeekBar.setProgress(Utils.refVolumeToPercent(getClient().getSoundInputGainLevel()));
+            micSeekBar.setProgress(Utils.refGainToPercent(getClient().getSoundInputGainLevel()));
         }
         TextView volLevel = findViewById(R.id.vollevel_text);
-        volLevel.setText(Utils.refVolumeToPercent(mastervol) + "%");
+        volLevel.setText(Utils.refVolumeToPercent(mastervol) + getString(R.string.unit_percent));
         volLevel.setContentDescription(getString(R.string.speaker_volume_description, volLevel.getText().toString()));
     }
 
@@ -2817,14 +3272,14 @@ private EditText newmsg;
 
     @Override
     public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String[] permissions, @NonNull int[] grantResults) {
+            @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        Permissions granted = Permissions.onRequestResult(this, requestCode, grantResults);
+        Permissions granted = Permissions.onRequestResult(this, requestCode, permissions, grantResults);
         if (granted == null) {
             granted = Permissions.fromRequestCode(requestCode);
             if ((granted != Permissions.READ_MEDIA_IMAGES) &&
-                (granted != Permissions.READ_MEDIA_VIDEO) &&
-                (granted != Permissions.READ_MEDIA_AUDIO))
+                    (granted != Permissions.READ_MEDIA_VIDEO) &&
+                    (granted != Permissions.READ_MEDIA_AUDIO))
                 return;
         }
         switch (granted) {
@@ -2853,7 +3308,7 @@ private EditText newmsg;
 
     @Override
     public void onCmdProcessing(int cmdId, boolean complete) {
-        if(complete) {
+        if (complete) {
             activecmds.remove(cmdId);
         }
     }
@@ -2861,40 +3316,106 @@ private EditText newmsg;
     @Override
     public void onCmdMyselfLoggedIn(int my_userid, UserAccount useraccount) {
         textmsgAdapter.setMyUserID(my_userid);
+        this.myUserAccount = useraccount;
 
+        setCurrentChannel(null);
         channelsAdapter.notifyDataSetChanged();
 
         if (mSectionsPagerAdapter != null) {
             mSectionsPagerAdapter.notifyDataSetChanged();
         }
+
+        isFirstJoinAfterLogin = true;
     }
 
     @Override
     public void onCmdMyselfLoggedOut() {
+        // Removemos o showKickedDialog(true, null) duplicado aqui.
+        // O onCmdMyselfKickedFromChannel já cuida de exibir o popup com o nome correto
+        // do Admin.
+
+        accessibilityAssistant.lockEvents();
+        channelsAdapter.notifyDataSetChanged();
+        eventHistoryAdapter.notifyDataSetChanged();
+        accessibilityAssistant.unlockEvents();
+
+        // Logout sound/TTS is now handled by TeamTalkService to support background notifications.
+
+        // Cancel any pending "left channel" TTS (user disconnected, no need to announce
+        // channel leave)
+        if (pendingMyselfLeftChanTTS != null) {
+            mainHandler.removeCallbacks(pendingMyselfLeftChanTTS);
+            pendingMyselfLeftChanTTS = null;
+        }
+    }
+
+    // Detecta se o logout foi causado por kick do servidor
+    private boolean wasKickedFromServer() {
+        // Usa o flag do TeamTalkService
+        TeamTalkService service = mConnection != null ? mConnection.getService() : null;
+        return service != null && service.wasKickedFromServer();
+    }
+
+
+    @Override
+    public void onCmdMyselfKickedFromChannel(int channelID) {
+        showKickedDialog(channelID == 0, null);
         accessibilityAssistant.lockEvents();
         channelsAdapter.notifyDataSetChanged();
         accessibilityAssistant.unlockEvents();
     }
 
     @Override
-    public void onCmdMyselfKickedFromChannel() {
+    public void onCmdMyselfKickedFromChannel(int channelID, User kicker) {
+        showKickedDialog(channelID == 0, kicker);
         accessibilityAssistant.lockEvents();
         channelsAdapter.notifyDataSetChanged();
         accessibilityAssistant.unlockEvents();
     }
 
-    @Override
-    public void onCmdMyselfKickedFromChannel(User kicker) {
-        accessibilityAssistant.lockEvents();
-        channelsAdapter.notifyDataSetChanged();
-        accessibilityAssistant.unlockEvents();
+    // Novo método para mostrar expulsão do servidor
+    public void onKickedFromServer(User kicker) {
+        showKickedDialog(true, kicker);
     }
+
+    /**
+     * Exibe o dialog de expulsão, diferenciando canal e servidor
+     * 
+     * @param fromServer true se expulsão do servidor, false se do canal
+     * @param kicker     usuário que expulsou, pode ser null
+     */
+    private void showKickedDialog(boolean fromServer, User kicker) {
+        TeamTalkService service = mConnection != null ? mConnection.getService() : null;
+        String kickerName;
+        if (kicker != null && getClient() != null && kicker.nUserID == getClient().getMyUserID()) {
+            kickerName = getString(R.string.scope_you);
+        } else {
+            kickerName = (kicker != null && kicker.szNickname != null && !kicker.szNickname.isEmpty())
+                    ? kicker.szNickname
+                    : getString(R.string.msg_no_owner);
+        }
+
+        int msgId = fromServer ? R.string.msg_kicked_from_server : R.string.msg_kicked_from_channel;
+        String channelName = getString(R.string.msg_current_channel);
+        if (!fromServer && mychannel != null && mychannel.szName != null && !mychannel.szName.isEmpty()) {
+            channelName = getString(R.string.msg_channel_prefix, mychannel.szName);
+        }
+
+        String message = fromServer ? getString(msgId, kickerName) : getString(msgId, channelName, kickerName);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.title_expelled)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+    // ...existing code...
 
     @Override
     public void onCmdUserLoggedIn(User user) {
         users.put(user.nUserID, user);
         prevChannels.remove(user.nUserID);
-        
+
         // Log removed (handled by TeamTalkService)
         // String name = Utils.getDisplayName(getBaseContext(), user);
         // logToEventHistory(name + " " + getString(R.string.text_tts_loggedin));
@@ -2902,14 +3423,10 @@ private EditText newmsg;
         accessibilityAssistant.lockEvents();
         textmsgAdapter.notifyDataSetChanged();
         eventHistoryAdapter.notifyDataSetChanged();
+        channelsAdapter.notifyDataSetChanged();
         accessibilityAssistant.unlockEvents();
 
-        if (sounds.get(SOUND_USERLOGGEDIN) != 0)
-            audioIcons.play(sounds.get(SOUND_USERLOGGEDIN), 1.0f, 1.0f, 0, 0, 1.0f);
-        if (ttsWrapper != null && prefs.get("server_login_checkbox", true)) {
-            String name = Utils.getDisplayName(getBaseContext(), user);
-            ttsWrapper.speak(getString(R.string.tts_fmt_2, name, getString(R.string.text_tts_loggedin)));
-        }
+        // Events handled by TeamTalkService
 
         if (onlineUsersAdapter != null) {
             onlineUsersAdapter.updateUsers(new ArrayList<>(users.values()));
@@ -2924,16 +3441,10 @@ private EditText newmsg;
         accessibilityAssistant.lockEvents();
         textmsgAdapter.notifyDataSetChanged();
         eventHistoryAdapter.notifyDataSetChanged();
-        accessibilityAssistant.unlockEvents();
-
-        if (sounds.get(SOUND_USERLOGGEDOFF) != 0)
-            audioIcons.play(sounds.get(SOUND_USERLOGGEDOFF), 1.0f, 1.0f, 0, 0, 1.0f);
-        if (ttsWrapper != null && prefs.get("server_logout_checkbox", true)) {
-            String name = Utils.getDisplayName(getBaseContext(), user);
-            ttsWrapper.speak(getString(R.string.tts_fmt_2, name, getString(R.string.text_tts_loggedout)));
+        if (channelsAdapter != null) {
+            channelsAdapter.notifyDataSetChanged();
         }
-
-        // Duplicate log removed - logging is handled by TeamTalkService
+        accessibilityAssistant.unlockEvents();
 
         if (onlineUsersAdapter != null) {
             onlineUsersAdapter.updateUsers(new ArrayList<>(users.values()));
@@ -2942,16 +3453,13 @@ private EditText newmsg;
 
     @Override
     public void onCmdUserUpdate(User user) {
-        if(curchannel != null && curchannel.nChannelID == user.nChannelID) {
+        subscriptionChange(user);
+        users.put(user.nUserID, user);
+        if (isVisibleChannel(user.nChannelID)) {
             accessibilityAssistant.lockEvents();
             channelsAdapter.notifyDataSetChanged();
             accessibilityAssistant.unlockEvents();
         }
-
-        subscriptionChange(user);
-
-        users.put(user.nUserID, user);
-
         if (onlineUsersAdapter != null) {
             onlineUsersAdapter.updateUsers(new ArrayList<>(users.values()));
         }
@@ -2960,70 +3468,57 @@ private EditText newmsg;
     @Override
     public void onCmdUserJoinedChannel(User user) {
         if(user.nUserID == getClient().getMyUserID()) {
+            //myself joined channel
+            
+            textmsgAdapter.notifyDataSetChanged();
 
             Channel chan = getService().getChannels().get(user.nChannelID);
-            setCurrentChannel(chan);
+            if (chan != null && (curchannel == null || curchannel.nChannelID != user.nChannelID || isFirstJoinAfterLogin)) {
+                setCurrentChannel(chan);
+                isFirstJoinAfterLogin = false;
+            }
             filesAdapter.update(curchannel);
-
             setMyChannel(chan);
 
+            //update the displayed channel to the one we're currently in
             accessibilityAssistant.lockEvents();
             channelsAdapter.notifyDataSetChanged();
+            eventHistoryAdapter.notifyDataSetChanged();
             accessibilityAssistant.unlockEvents();
         }
-
-        Integer prevChanId = prevChannels.get(user.nUserID);
-        
-        // Update user state
-        users.put(user.nUserID, user);
-
-        String name = Utils.getDisplayName(getBaseContext(), user);
-        String newChanLoggingName = getChannelNameForTTS(user.nChannelID);
-        boolean isToMyChannel = (mychannel != null && mychannel.nChannelID == user.nChannelID);
-
-        String joinLogMsg = name + " " + getString(R.string.text_tts_joined_chan) + " " + newChanLoggingName;
-        
-        // Only log if NOT joined my channel (Service handles my channel)
-        if (!isToMyChannel) {
-            logToEventHistory(joinLogMsg);
+        else if((curchannel != null && curchannel.nChannelID == user.nChannelID) ||
+                (curchannel == null && user.nChannelID == getClient().getRootChannelID())) {
+            //other user joined current channel or root channel when viewing root
+            accessibilityAssistant.lockEvents();
+            channelsAdapter.notifyDataSetChanged();
+            eventHistoryAdapter.notifyDataSetChanged();
+            accessibilityAssistant.unlockEvents();
         }
         
-        if (ttsWrapper != null && user.nUserID != getClient().getMyUserID() && prefs.get("channel_join_checkbox", true)) {
-            
-            if (isToMyChannel) {
-                 // Joined MY channel - "Fulano entered the channel"
-                ttsWrapper.speak(getString(R.string.tts_fmt_2, name, getString(R.string.text_tts_joined_chan)));
-            } else {
-                // Joined ANOTHER channel - "Fulano entered the channel [Channel Name]"
-                ttsWrapper.speak(joinLogMsg);
-            }
-        }
-
         if(mychannel != null && mychannel.nChannelID == user.nChannelID) {
-
+            //event took place in current channel
+            
             if(user.nUserID != getClient().getMyUserID()) {
                 accessibilityAssistant.lockEvents();
                 textmsgAdapter.notifyDataSetChanged();
-                eventHistoryAdapter.notifyDataSetChanged();
                 channelsAdapter.notifyDataSetChanged();
-                
-                if (mychannel.nChannelID == user.nChannelID) {
-                    if (sounds.get(SOUND_USERJOIN) != 0)
-                        audioIcons.play(sounds.get(SOUND_USERJOIN), 1.0f, 1.0f, 0, 0, 1.0f);
-                }
+                eventHistoryAdapter.notifyDataSetChanged();
                 accessibilityAssistant.unlockEvents();
             }
             else {
                 textmsgAdapter.notifyDataSetChanged();
-                eventHistoryAdapter.notifyDataSetChanged();
                 channelsAdapter.notifyDataSetChanged();
+                eventHistoryAdapter.notifyDataSetChanged();
             }
         }
         else if (isVisibleChannel(user.nChannelID)) {
             accessibilityAssistant.lockEvents();
             channelsAdapter.notifyDataSetChanged();
+            eventHistoryAdapter.notifyDataSetChanged();
             accessibilityAssistant.unlockEvents();
         }
+
+        users.put(user.nUserID, user);
 
         if (onlineUsersAdapter != null) {
             onlineUsersAdapter.updateUsers(new ArrayList<>(users.values()));
@@ -3032,65 +3527,48 @@ private EditText newmsg;
 
     @Override
     public void onCmdUserLeftChannel(int channelid, User user) {
-        prevChannels.put(user.nUserID, channelid);
-        users.put(user.nUserID, user);
-        
-        String logName = Utils.getDisplayName(getBaseContext(), user);
-        String chanName = getChannelNameForTTS(channelid);
-        
-        // Log message always uses full format
-        boolean isFromMyChannel = (mychannel != null && mychannel.nChannelID == channelid);
-        // Only log if NOT from my channel (Service handles my channel)
-        if (!isFromMyChannel) {
-             logToEventHistory(logName + " " + getString(R.string.text_tts_left_chan) + " " + chanName);
+
+        if (users.containsKey(user.nUserID)) {
+            users.put(user.nUserID, user);
         }
-
+        
         if(user.nUserID == getClient().getMyUserID()) {
-
+            //myself left current channel
+            
             textmsgAdapter.notifyDataSetChanged();
-            eventHistoryAdapter.notifyDataSetChanged();
 
-            // No TTS when I leave the channel
-
-            // Do not reset current channel view to allow navigation
+            // Keep current channel view even after leaving
             // setCurrentChannel(null);
+            
             setMyChannel(null);
         }
-        else if(curchannel != null && channelid == curchannel.nChannelID){
-
+        else if((curchannel != null && channelid == curchannel.nChannelID) ||
+                (curchannel == null && channelid == getClient().getRootChannelID())){
+            //other user left current channel or root channel when viewing root
+            
             accessibilityAssistant.lockEvents();
             textmsgAdapter.notifyDataSetChanged();
+            if (channelsAdapter != null) {
+                channelsAdapter.notifyDataSetChanged();
+            }
             eventHistoryAdapter.notifyDataSetChanged();
             accessibilityAssistant.unlockEvents();
         }
-
+        
         if(mychannel != null && mychannel.nChannelID == channelid) {
-
+            //event took place in current channel
+            
             accessibilityAssistant.lockEvents();
             textmsgAdapter.notifyDataSetChanged();
-            eventHistoryAdapter.notifyDataSetChanged();
             channelsAdapter.notifyDataSetChanged();
-            if (getClient().getMyChannelID() == channelid) {
-                    if (sounds.get(SOUND_USERLEFT) != 0)
-                        audioIcons.play(sounds.get(SOUND_USERLEFT), 1.0f, 1.0f, 0, 0, 1.0f);
-                if (ttsWrapper != null && prefs.get("channel_leave_checkbox", true)) {
-                    // Remote user left MY channel: "Name has left the channel"
-                    String name = Utils.getDisplayName(getBaseContext(), user);
-                    ttsWrapper.speak(getString(R.string.tts_fmt_2, name, getString(R.string.text_tts_left_chan)));
-                }
-            }
+            eventHistoryAdapter.notifyDataSetChanged();
             accessibilityAssistant.unlockEvents();
         }
         else if (isVisibleChannel(channelid)) {
             accessibilityAssistant.lockEvents();
             channelsAdapter.notifyDataSetChanged();
+            eventHistoryAdapter.notifyDataSetChanged();
             accessibilityAssistant.unlockEvents();
-
-            if (ttsWrapper != null && prefs.get("channel_leave_checkbox", true)) {
-                 // Remote user left ANOTHER channel: "Name has left the channel X"
-                 String name = Utils.getDisplayName(getBaseContext(), user);
-                 ttsWrapper.speak(getString(R.string.tts_fmt_3, name, getString(R.string.text_tts_left_chan), chanName));
-            }
         }
 
         if (onlineUsersAdapter != null) {
@@ -3117,99 +3595,98 @@ private EditText newmsg;
 
         if (textmessage.nFromUserID != getClient().getMyUserID()) {
             switch (textmessage.nMsgType) {
-                case TextMsgType.MSGTYPE_CHANNEL :
-                    if (sounds.get(SOUND_CHANMSG) != 0)
-                        audioIcons.play(sounds.get(SOUND_CHANMSG), 1.0f, 1.0f, 0, 0, 1.0f);
-                    if (ttsWrapper != null && prefs.get("channel_message_checkbox", true)) {
-                        User sender = getService().getUsers().get(textmessage.nFromUserID);
-                        String name = Utils.getDisplayName(getBaseContext(), sender);
-                        ttsWrapper.speak(getString(R.string.text_tts_channel_message, (sender != null) ? name : "", textmessage.szMessage));
-                    }
+                case TextMsgType.MSGTYPE_CHANNEL:
+                    // TeamTalkService already handles SOUND_CHANMSG
                     Log.d(TAG, "Channel message from " + textmessage.nFromUserID);
                     break;
-                case TextMsgType.MSGTYPE_BROADCAST :
-                    if (sounds.get(SOUND_BCASTMSG) != 0)
-                        audioIcons.play(sounds.get(SOUND_BCASTMSG), 1.0f, 1.0f, 0, 0, 1.0f);
-                    if (ttsWrapper != null && prefs.get("broadcast_message_checkbox", true)) {
+                case TextMsgType.MSGTYPE_BROADCAST:
+                    // TeamTalkService already handles SOUND_BCASTMSG
+                    break;
+                case TextMsgType.MSGTYPE_USER:
+                    // TeamTalkService already handles SOUND_USERMSG
+                    boolean autoPopup = prefs.get("pref_auto_popup_private_msg", false);
+                    if (autoPopup) {
+                        // Launch conversation window directly
+                        Intent popupIntent = new Intent(this, TextMessageActivity.class);
+                        popupIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                        startActivity(popupIntent.putExtra(TextMessageActivity.EXTRA_USERID, textmessage.nFromUserID));
+                    } else {
                         User sender = getService().getUsers().get(textmessage.nFromUserID);
-                        String name = Utils.getDisplayName(getBaseContext(), sender);
-                        ttsWrapper.speak(getString(R.string.text_tts_broadcast_message, (sender != null) ? name : "", textmessage.szMessage));
+                        String senderName = (sender != null) ? Utils.getDisplayName(getBaseContext(), sender) : "";
+                        Intent action = new Intent(this, TextMessageActivity.class);
+                        action.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            NotificationChannel mChannel = new NotificationChannel(MSG_NOTIFICATION_CHANNEL_ID,
+                                    getString(R.string.notification_channel_name), NotificationManager.IMPORTANCE_HIGH);
+                            mChannel.enableVibration(false);
+                            mChannel.setVibrationPattern(null);
+                            mChannel.enableLights(false);
+                            mChannel.setSound(null, null);
+                            notificationManager.createNotificationChannel(mChannel);
+                        }
+                        Notification notification = new NotificationCompat.Builder(this, MSG_NOTIFICATION_CHANNEL_ID)
+                                .setSmallIcon(R.drawable.message)
+                                .setContentTitle(getString(R.string.private_message_notification, senderName))
+                                .setContentText(getString(R.string.private_message_notification_hint))
+                                .setContentIntent(PendingIntent.getActivity(this, textmessage.nFromUserID,
+                                        action.putExtra(TextMessageActivity.EXTRA_USERID, textmessage.nFromUserID),
+                                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
+                                .setAutoCancel(true)
+                                .build();
+                        notificationManager.notify(MESSAGE_NOTIFICATION_TAG, textmessage.nFromUserID, notification);
                     }
                     break;
-                case TextMsgType.MSGTYPE_USER :
-                    if (sounds.get(SOUND_USERMSG) != 0)
-                        audioIcons.play(sounds.get(SOUND_USERMSG), 1.0f, 1.0f, 0, 0, 1.0f);
-                    if (ttsWrapper != null && prefs.get("private_message_checkbox", true)) {
-                        User sender = getService().getUsers().get(textmessage.nFromUserID);
-                        String name = Utils.getDisplayName(getBaseContext(), sender);
-                        ttsWrapper.speak(getString(R.string.text_tts_private_message, (sender != null) ? name : "", textmessage.szMessage));
+                case TextMsgType.MSGTYPE_CUSTOM:
+                    if (textmessage.szMessage.startsWith("typing\r\n")) {
+                        String value = textmessage.szMessage.substring(8);
+                        if ("1".equals(value)) {
+                            playSound(SOUND_TYPING);
+                            if (ttsWrapper != null && prefs.get("pref_tts_typing", true)) {
+                                User typer = getService().getUsers().get(textmessage.nFromUserID);
+                                String name = (typer != null) ? Utils.getDisplayName(getBaseContext(), typer) : "";
+                                speakAndLog(getString(R.string.pref_tts_typing_msg, name), MyTextMessage.MSGTYPE_LOG_INFO);
+                            }
+                        }
                     }
-
-                    User sender = getService().getUsers().get(textmessage.nFromUserID);
-                    String senderName = (sender != null) ? Utils.getDisplayName(getBaseContext(), sender) : "";
-                    Intent action = new Intent(this, TextMessageActivity.class);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        NotificationChannel mChannel = new NotificationChannel(MSG_NOTIFICATION_CHANNEL_ID, getString(R.string.notification_channel_name), NotificationManager.IMPORTANCE_HIGH);
-                        mChannel.enableVibration(false);
-                        mChannel.setVibrationPattern(null);
-                        mChannel.enableLights(false);
-                        mChannel.setSound(null, null);
-                        notificationManager.createNotificationChannel(mChannel);
-                    }
-                    Notification notification = new NotificationCompat.Builder(this, MSG_NOTIFICATION_CHANNEL_ID)
-                        .setSmallIcon(R.drawable.message)
-                        .setContentTitle(getString(R.string.private_message_notification, senderName))
-                        .setContentText(getString(R.string.private_message_notification_hint))
-                        .setContentIntent(PendingIntent.getActivity(this, textmessage.nFromUserID, action.putExtra(TextMessageActivity.EXTRA_USERID, textmessage.nFromUserID), PendingIntent.FLAG_IMMUTABLE))
-                        .setAutoCancel(true)
-                        .build();
-                    notificationManager.notify(MESSAGE_NOTIFICATION_TAG, textmessage.nFromUserID, notification);
                     break;
             }
         }
-        else if (textmessage.nFromUserID == getClient().getMyUserID() && textmessage.nMsgType == TextMsgType.MSGTYPE_CHANNEL) {
-            if (sounds.get(SOUND_CHANMSGSENT) != 0)
-                audioIcons.play(sounds.get(SOUND_CHANMSGSENT), 1.0f, 1.0f, 0, 0, 1.0f);
-            if (ttsWrapper != null && prefs.get("channel_message_sent_checkbox", true)) {
-                ttsWrapper.speak(getString(R.string.text_tts_channel_message_sent, textmessage.szMessage));
-            }
+
+        else if (textmessage.nFromUserID == getClient().getMyUserID()) {
+            // Outgoing message sounds and TTS are now handled immediately upon sending
+            // in sendMsgToChannel and playPrivateMessageSentSound to ensure responsiveness.
         }
     }
 
     @Override
     public void onCmdChannelNew(Channel channel) {
-        if (curchannel != null && curchannel.nChannelID == channel.nParentID) {
-            accessibilityAssistant.lockEvents();
-            channelsAdapter.notifyDataSetChanged();
-            accessibilityAssistant.unlockEvents();
-        }
+        accessibilityAssistant.lockEvents();
+        channelsAdapter.notifyDataSetChanged();
+        eventHistoryAdapter.notifyDataSetChanged();
+        accessibilityAssistant.unlockEvents();
     }
 
     @Override
     public void onCmdChannelUpdate(Channel channel) {
-        if (curchannel != null && curchannel.nChannelID == channel.nParentID) {
-            accessibilityAssistant.lockEvents();
-            channelsAdapter.notifyDataSetChanged();
-            accessibilityAssistant.unlockEvents();
-        }
+        accessibilityAssistant.lockEvents();
+        channelsAdapter.notifyDataSetChanged();
+        eventHistoryAdapter.notifyDataSetChanged();
+        accessibilityAssistant.unlockEvents();
 
-        if(mychannel != null && mychannel.nChannelID == channel.nChannelID) {
+        if (mychannel != null && mychannel.nChannelID == channel.nChannelID) {
 
             if (ttsWrapper != null) {
-                Utils.ttsTransmitUsersToggled(getBaseContext(), mychannel, channel, getService().getUsers()).ifPresent(text -> ttsWrapper.speak(text));
+                Utils.ttsTransmitUsersToggled(getBaseContext(), mychannel, channel, getService().getUsers())
+                        .ifPresent(text -> speakAndLog(text, MyTextMessage.MSGTYPE_LOG_INFO));
             }
 
             int myuserid = getClient().getMyUserID();
 
-            if(channel.transmitUsersQueue[0] == myuserid && mychannel.transmitUsersQueue[0] != myuserid) {
-                if(sounds.get(SOUND_TXREADY) != 0) {
-                    audioIcons.play(sounds.get(SOUND_TXREADY), 1.0f, 1.0f, 0, 0, 1.0f);
-                }
+            if (channel.transmitUsersQueue[0] == myuserid && mychannel.transmitUsersQueue[0] != myuserid) {
+                // TeamTalkService handles TX state change sounds
             }
-            if(mychannel.transmitUsersQueue[0] == myuserid && channel.transmitUsersQueue[0] != myuserid) {
-                if(sounds.get(SOUND_TXSTOP) != 0) {
-                    audioIcons.play(sounds.get(SOUND_TXSTOP), 1.0f, 1.0f, 0, 0, 1.0f);
-                }
+            if (mychannel.transmitUsersQueue[0] == myuserid && channel.transmitUsersQueue[0] != myuserid) {
+                // TeamTalkService handles TX state change sounds
             }
 
             setMyChannel(channel);
@@ -3218,74 +3695,81 @@ private EditText newmsg;
 
     @Override
     public void onCmdChannelRemove(Channel channel) {
-        if (curchannel != null && curchannel.nChannelID == channel.nParentID) {
-            accessibilityAssistant.lockEvents();
-            channelsAdapter.notifyDataSetChanged();
-            accessibilityAssistant.unlockEvents();
-        }
+        accessibilityAssistant.lockEvents();
+        channelsAdapter.notifyDataSetChanged();
+        eventHistoryAdapter.notifyDataSetChanged();
+        accessibilityAssistant.unlockEvents();
     }
 
     @Override
     public void onCmdFileNew(RemoteFile remotefile) {
+        accessibilityAssistant.lockEvents();
         filesAdapter.update();
-
-        if(activecmds.size() == 0 && getClient().getMyChannelID() == remotefile.nChannelID) {
-            if(sounds.get(SOUND_FILESUPDATE) != 0) {
-                audioIcons.play(sounds.get(SOUND_FILESUPDATE), 1.0f, 1.0f, 0, 0, 1.0f);
-            }
-        }
+        eventHistoryAdapter.notifyDataSetChanged();
+        accessibilityAssistant.unlockEvents();
     }
 
     @Override
     public void onCmdFileRemove(RemoteFile remotefile) {
+        accessibilityAssistant.lockEvents();
         filesAdapter.update();
-
-        if(activecmds.size() == 0 && getClient().getMyChannelID() == remotefile.nChannelID) {
-            if(sounds.get(SOUND_FILESUPDATE) != 0) {
-                audioIcons.play(sounds.get(SOUND_FILESUPDATE), 1.0f, 1.0f, 0, 0, 1.0f);
-            }
-        }
+        eventHistoryAdapter.notifyDataSetChanged();
+        accessibilityAssistant.unlockEvents();
     }
 
     @Override
     public void onConnectionLost() {
-        if(sounds.get(SOUND_SERVERLOST) != 0) {
-            audioIcons.play(sounds.get(SOUND_SERVERLOST), 1.0f, 1.0f, 0, 0, 1.0f);
+        // If in a channel, play channel-left sound to mirror the channel-join sound on
+        // login
+        if (mychannel != null && prefs.get("pref_sound_myself_leave", true)) {
+            // TeamTalkService already handles SOUND_USERLEFT
+        }
+        // Clear channel state so next login is treated as initial join (not manual)
+        setMyChannel(null);
+
+        // Server lost sound/TTS is now handled by TeamTalkService.
+
+
+        // Cancel any pending channel-leave TTS (disconnect TTS covers it)
+        if (pendingMyselfLeftChanTTS != null) {
+            mainHandler.removeCallbacks(pendingMyselfLeftChanTTS);
+            pendingMyselfLeftChanTTS = null;
         }
     }
 
     @Override
     public void onUserStateChange(User user) {
         users.put(user.nUserID, user);
+        accessibilityAssistant.lockEvents();
+        channelsAdapter.notifyDataSetChanged();
+        eventHistoryAdapter.notifyDataSetChanged();
+        accessibilityAssistant.unlockEvents();
 
-        if (curchannel != null && user.nChannelID == curchannel.nChannelID) {
-            accessibilityAssistant.lockEvents();
-            channelsAdapter.notifyDataSetChanged();
-            accessibilityAssistant.unlockEvents();
+        if (user.nUserID == getClient().getMyUserID()) {
+            invalidateOptionsMenu();
         }
-
     }
 
     @Override
     public void onVoiceTransmissionToggle(boolean voiceTransmissionEnabled, boolean isSuspended) {
         adjustTxState(voiceTransmissionEnabled);
 
+        // Bug fix: update channel list so local user icon turns green when PTT is
+        // active
+        accessibilityAssistant.lockEvents();
+        channelsAdapter.notifyDataSetChanged();
+        accessibilityAssistant.unlockEvents();
+
         if (!isSuspended) {
             boolean ptt_vibrate = prefs.get("vibrate_checkbox", true) &&
-                Permissions.VIBRATE.request(this);
+                    Permissions.VIBRATE.request(this);
             if (voiceTransmissionEnabled) {
                 accessibilityAssistant.shutUp();
-                if (sounds.get(SOUND_VOICETXON) != 0) {
-                    audioIcons.play(sounds.get(SOUND_VOICETXON), 1.0f, 1.0f, 0, 0, 1.0f);
-                }
                 if (ptt_vibrate) {
                     Vibrator vibrat = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
                     vibrat.vibrate(50);
                 }
             } else {
-                if (sounds.get(SOUND_VOICETXOFF) != 0) {
-                    audioIcons.play(sounds.get(SOUND_VOICETXOFF), 1.0f, 1.0f, 0, 0, 1.0f);
-                }
                 if (ptt_vibrate) {
                     Vibrator vibrat = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
                     long[] pattern = { 0, 20, 80, 20 };
@@ -3297,15 +3781,10 @@ private EditText newmsg;
 
     @Override
     public void onVoiceActivationToggle(boolean voiceActivationEnabled, boolean isSuspended) {
-        adjustVoxState(voiceActivationEnabled, voiceActivationEnabled ? getClient().getVoiceActivationLevel() : getClient().getSoundInputGainLevel());
+        adjustVoxState(voiceActivationEnabled,
+                voiceActivationEnabled ? getClient().getVoiceActivationLevel() : getClient().getSoundInputGainLevel());
         if (voiceActivationEnabled) {
-            if (sounds.get(SOUND_VOXENABLE) != 0) {
-                audioIcons.play(sounds.get(SOUND_VOXENABLE), 1.0f, 1.0f, 0, 0, 1.0f);
-            }
         } else {
-            if (sounds.get(SOUND_VOXDISABLE) != 0) {
-                audioIcons.play(sounds.get(SOUND_VOXDISABLE), 1.0f, 1.0f, 0, 0, 1.0f);
-            }
         }
     }
 
@@ -3313,78 +3792,14 @@ private EditText newmsg;
     public void onVoiceActivation(boolean bVoiceActive) {
         adjustTxState(bVoiceActive);
 
-        int sound = sounds.get(bVoiceActive ? SOUND_VOXON : SOUND_VOXOFF);
-        if (sound != 0)
-            audioIcons.play(sound, 1.0f, 1.0f, 0, 0, 1.0f);
+        // Bug fix: update channel list so local user icon turns green when VOX is
+        // active
+        accessibilityAssistant.lockEvents();
+        channelsAdapter.notifyDataSetChanged();
+        accessibilityAssistant.unlockEvents();
+
     }
 
-    private void initSoundFilenames() {
-        Log.d(TAG, "initSoundFilenames() called");
-        File soundDir = new File("/sdcard/TeamTalk/Sounds");
-        if (!soundDir.exists()) {
-             if (soundDir.mkdirs()) {
-                 Log.d(TAG, "Created sound directory: " + soundDir.getAbsolutePath());
-             } else {
-                 Log.e(TAG, "Failed to create sound directory: " + soundDir.getAbsolutePath());
-             }
-        }
-
-        soundFilenames.put(SOUND_USERLOGGEDIN, "logged_on.wav");
-        soundFilenames.put(SOUND_USERLOGGEDOFF, "logged_off.wav");
-        soundFilenames.put(SOUND_MUTEALL, "mute_all.wav");
-        soundFilenames.put(SOUND_UNMUTEALL, "unmute_all.wav");
-        soundFilenames.put(SOUND_USERMSG, "new_textmsg.wav");
-        soundFilenames.put(SOUND_CHANMSGSENT, "chan_msg_sent.wav");
-        soundFilenames.put(SOUND_SERVERLOST, "server_lost.wav");
-        soundFilenames.put(SOUND_VOICETXON, "voice_tx_on.wav");
-        soundFilenames.put(SOUND_VOICETXOFF, "voice_tx_off.wav");
-        soundFilenames.put(SOUND_USERJOIN, "joined_chan.wav");
-        soundFilenames.put(SOUND_USERLEFT, "user_left.wav");
-        soundFilenames.put(SOUND_CHANMSG, "channel_message.wav");
-        soundFilenames.put(SOUND_BCASTMSG, "broadcast_message.wav");
-        soundFilenames.put(SOUND_FILESUPDATE, "fileupdate.wav");
-        soundFilenames.put(SOUND_VOXENABLE, "voiceact_enable.wav");
-        soundFilenames.put(SOUND_VOXDISABLE, "voiceact_disable.wav");
-        soundFilenames.put(SOUND_VOXON, "voiceact_on.wav");
-        soundFilenames.put(SOUND_VOXOFF, "voiceact_off.wav");
-        soundFilenames.put(SOUND_TXREADY, "txqueue_start.wav");
-        soundFilenames.put(SOUND_TXSTOP, "txqueue_stop.wav");
-        soundFilenames.put(SOUND_INTERCEPTON, "intercept.wav");
-        soundFilenames.put(SOUND_INTERCEPTOFF, "interceptend.wav");
-    }
-
-    private int loadSound(int soundEvent, int defaultResId) {
-        String packName = prefs.get("pref_sound_pack", "Default");
-        Log.d(TAG, "loadSound event: " + soundEvent + " pack: " + packName);
-        if ("Default".equals(packName)) {
-            if (defaultResId == 0) return 0;
-            return audioIcons.load(this, defaultResId, 1);
-        }
-
-        String filename = soundFilenames.get(soundEvent);
-        if (filename == null) {
-            Log.w(TAG, "No filename for event: " + soundEvent + ". Silent (no fallback).");
-            return 0;
-        }
-
-        // Remove .wav extension if present to get the base name
-        String basename = filename;
-        if (filename.endsWith(".wav")) {
-            basename = filename.substring(0, filename.length() - 4);
-        }
-
-        String[] extensions = {".wav", ".ogg", ".mp3"};
-        for (String ext : extensions) {
-            File soundFile = new File("/sdcard/TeamTalk/Sounds/" + packName + "/" + basename + ext);
-            if (soundFile.exists()) {
-                Log.d(TAG, "Loading sound file: " + soundFile.getAbsolutePath());
-                return audioIcons.load(soundFile.getAbsolutePath(), 1);
-            }
-        }
-        
-        Log.w(TAG, "Sound file not found for event " + soundEvent + " in pack " + packName + ". Silent (no fallback).");
-        return 0;
-    }
 
     class PrivateConversationsAdapter extends BaseAdapter {
         private final LayoutInflater inflater;
@@ -3419,23 +3834,13 @@ private EditText newmsg;
             User user = users.get(userId);
             String nickname = "";
             if (user != null) {
-                 nickname = Utils.getDisplayName(MainActivity.this, user);
+                nickname = Utils.getDisplayName(MainActivity.this, user);
             } else {
-                 nickname = "User " + userId;
+                nickname = getString(R.string.fallback_nickname, userId);
             }
 
             TextView nickname_tv = convertView.findViewById(R.id.conv_user_nickname);
             nickname_tv.setText(nickname);
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
 
             return convertView;
         }
@@ -3443,6 +3848,238 @@ private EditText newmsg;
         public void setUserIds(List<Integer> ids) {
             this.userIds = ids;
             notifyDataSetChanged();
+        }
+    }
+
+    @Override
+    public void onAccessibilityActionClick(View view, int actionId) {
+        Object item = view.getTag();
+        if (item instanceof User) {
+            handleUserAction(actionId, (User) item);
+        } else if (item instanceof Channel) {
+            handleChannelAction(actionId, (Channel) item);
+        } else if (item instanceof MyTextMessage) {
+            if (actionId == R.string.action_reply) {
+                mViewPager.setCurrentItem(2); // Chat tab
+                EditText send_msg = findViewById(R.id.channel_im_edittext);
+                if (send_msg != null) {
+                    send_msg.requestFocus();
+                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    imm.showSoftInput(send_msg, InputMethodManager.SHOW_IMPLICIT);
+                }
+            }
+        }
+    }
+
+    private void toggleVoiceTransmission() {
+        if (getService() != null) {
+            if (getService().isVoiceActivationEnabled())
+                getService().enableVoiceActivation(false);
+            getService().enableVoiceTransmission(!getService().isVoiceTransmissionEnabled());
+        }
+    }
+
+    @Override
+    public List<AccessibilityActionCompat> getCustomActions(View view) {
+        Object item = view.getTag();
+        List<AccessibilityActionCompat> actions = new ArrayList<>();
+        if (item instanceof User) {
+            User user = (User) item;
+            actions.add(new AccessibilityActionCompat(R.string.info_copy_name, getString(R.string.info_copy_name)));
+            actions.add(new AccessibilityActionCompat(R.string.info_copy_id, getString(R.string.info_copy_id)));
+            actions.add(new AccessibilityActionCompat(R.string.info_copy_ip, getString(R.string.info_copy_ip)));
+            actions.add(new AccessibilityActionCompat(R.string.action_edit_user, getString(R.string.action_edit_user)));
+            actions.add(new AccessibilityActionCompat(R.string.button_msg, getString(R.string.button_msg)));
+            actions.add(new AccessibilityActionCompat(R.string.action_transmission_control, getString(R.string.action_transmission_control)));
+
+            UserAccount myuseraccount = new UserAccount();
+            getClient().getMyUserAccount(myuseraccount);
+            boolean kickRight = (myuseraccount.uUserRights
+                    & UserRight.USERRIGHT_KICK_USERS) != UserRight.USERRIGHT_NONE;
+            boolean banRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_BAN_USERS) != UserRight.USERRIGHT_NONE;
+            boolean operatorRight = getClient().isChannelOperator(getClient().getMyUserID(), user.nChannelID);
+
+            boolean isOp = getClient().isChannelOperator(user.nUserID, user.nChannelID);
+            actions.add(new AccessibilityActionCompat(
+                    isOp ? R.string.action_revoke_operator : R.string.action_make_operator,
+                    getString(isOp ? R.string.action_revoke_operator : R.string.action_make_operator)));
+
+            if (kickRight || operatorRight) {
+                actions.add(
+                        new AccessibilityActionCompat(R.string.action_kickchan, getString(R.string.action_kickchan)));
+            }
+            if (banRight || operatorRight) {
+                actions.add(new AccessibilityActionCompat(R.string.action_banchan, getString(R.string.action_banchan)));
+            }
+            if (kickRight) {
+                actions.add(new AccessibilityActionCompat(R.string.action_kicksrv, getString(R.string.action_kicksrv)));
+            }
+            if (banRight) {
+                actions.add(new AccessibilityActionCompat(R.string.action_bansrv, getString(R.string.action_bansrv)));
+            }
+        } else if (item instanceof Channel) {
+            Channel channel = (Channel) item;
+            UserAccount myuseraccount = new UserAccount();
+            getClient().getMyUserAccount(myuseraccount);
+            boolean chanRight = (myuseraccount.uUserRights
+                    & UserRight.USERRIGHT_MODIFY_CHANNELS) != UserRight.USERRIGHT_NONE;
+            boolean tempChanRight = (myuseraccount.uUserRights
+                    & UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL) != UserRight.USERRIGHT_NONE;
+
+            if (chanRight || tempChanRight) {
+                actions.add(new AccessibilityActionCompat(R.string.action_new_channel,
+                        getString(R.string.action_new_channel)));
+                actions.add(new AccessibilityActionCompat(R.string.title_activity_channel_prop,
+                        getString(R.string.title_activity_channel_prop)));
+                actions.add(new AccessibilityActionCompat(R.string.action_delete, getString(R.string.action_delete)));
+            }
+
+            actions.add(new AccessibilityActionCompat(R.string.action_join, getString(R.string.action_join)));
+
+            boolean moveRight = (myuseraccount.uUserRights
+                    & UserRight.USERRIGHT_MOVE_USERS) != UserRight.USERRIGHT_NONE;
+            if (moveRight && !userIDS.isEmpty()) {
+                actions.add(new AccessibilityActionCompat(R.string.action_move, getString(R.string.action_move)));
+            }
+
+            boolean banRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_BAN_USERS) != UserRight.USERRIGHT_NONE;
+            boolean operatorRight = getClient().isChannelOperator(getClient().getMyUserID(), channel.nChannelID);
+
+            if (banRight || operatorRight) {
+                actions.add(new AccessibilityActionCompat(R.string.action_banned_users,
+                        getString(R.string.action_banned_users)));
+            }
+        } else if (item instanceof MyTextMessage) {
+            MyTextMessage msg = (MyTextMessage) item;
+            if (msg.nFromUserID != getClient().getMyUserID() && msg.nMsgType != TextMsgType.MSGTYPE_BROADCAST) {
+                actions.add(new AccessibilityActionCompat(R.string.action_reply, getString(R.string.action_reply)));
+            }
+        }
+        return actions;
+    }
+
+    private void showSubscriptionsDialog(User user) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.action_subscriptions);
+
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_subscriptions, null);
+        builder.setView(view);
+
+        SwitchCompat voiceLocal = view.findViewById(R.id.switch_voice_local);
+        SwitchCompat vidLocal = view.findViewById(R.id.switch_vid_local);
+        SwitchCompat deskLocal = view.findViewById(R.id.switch_desk_local);
+        SwitchCompat mediaLocal = view.findViewById(R.id.switch_media_local);
+        SwitchCompat msgLocal = view.findViewById(R.id.switch_msg_local);
+
+        voiceLocal.setChecked((user.uLocalSubscriptions & Subscription.SUBSCRIBE_VOICE) != 0);
+        vidLocal.setChecked((user.uLocalSubscriptions & Subscription.SUBSCRIBE_VIDEOCAPTURE) != 0);
+        deskLocal.setChecked((user.uLocalSubscriptions & Subscription.SUBSCRIBE_DESKTOP) != 0);
+        mediaLocal.setChecked((user.uLocalSubscriptions & Subscription.SUBSCRIBE_MEDIAFILE) != 0);
+        msgLocal.setChecked((user.uLocalSubscriptions & Subscription.SUBSCRIBE_USER_MSG) != 0);
+
+        voiceLocal.setOnClickListener(v -> {
+            boolean checked = voiceLocal.isChecked();
+            Utils.toggleSubscription(getClient(), user, Subscription.SUBSCRIBE_VOICE, checked);
+            announceTransmissionState(getString(R.string.user_prop_title_subscribe_voice), checked, false);
+        });
+        vidLocal.setOnClickListener(v -> {
+            boolean checked = vidLocal.isChecked();
+            Utils.toggleSubscription(getClient(), user, Subscription.SUBSCRIBE_VIDEOCAPTURE, checked);
+            announceTransmissionState(getString(R.string.user_prop_title_subscribe_vid), checked, false);
+        });
+        deskLocal.setOnClickListener(v -> {
+            boolean checked = deskLocal.isChecked();
+            Utils.toggleSubscription(getClient(), user, Subscription.SUBSCRIBE_DESKTOP, checked);
+            announceTransmissionState(getString(R.string.user_prop_title_subscribe_desk), checked, false);
+        });
+        mediaLocal.setOnClickListener(v -> {
+            boolean checked = mediaLocal.isChecked();
+            Utils.toggleSubscription(getClient(), user, Subscription.SUBSCRIBE_MEDIAFILE, checked);
+            announceTransmissionState(getString(R.string.user_prop_title_subscribe_media), checked, false);
+        });
+        msgLocal.setOnClickListener(v -> {
+            boolean checked = msgLocal.isChecked();
+            Utils.toggleSubscription(getClient(), user, Subscription.SUBSCRIBE_USER_MSG, checked);
+            announceTransmissionState(getString(R.string.user_prop_title_subscribe_user_msg), checked, false);
+        });
+
+        builder.setPositiveButton(android.R.string.ok, null);
+        builder.show();
+    }
+
+    private void showTransmissionControlDialog(User user) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.action_transmission_control);
+
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_transmission_control, null);
+        builder.setView(view);
+
+        getClient().getMyUserAccount(myUserAccount);
+        boolean isAdmin = (myUserAccount.uUserType & UserType.USERTYPE_ADMIN) != 0;
+        boolean isOp = getClient().isChannelOperator(getClient().getMyUserID(), user.nChannelID);
+        boolean canModify = (myUserAccount.uUserRights & UserRight.USERRIGHT_MODIFY_CHANNELS) != 0;
+
+        if (isAdmin || isOp || canModify) {
+            view.findViewById(R.id.layout_global_controls).setVisibility(View.VISIBLE);
+            SwitchCompat voiceGlobal = view.findViewById(R.id.switch_voice_global);
+            SwitchCompat vidGlobal = view.findViewById(R.id.switch_vid_global);
+            SwitchCompat deskGlobal = view.findViewById(R.id.switch_desk_global);
+            SwitchCompat mediaGlobal = view.findViewById(R.id.switch_media_global);
+            SwitchCompat msgGlobal = view.findViewById(R.id.switch_msg_global);
+
+            Channel chan = getService().getChannels().get(user.nChannelID);
+            if (chan != null) {
+                voiceGlobal.setChecked(Utils.isTransmitAllowed(user, chan, StreamType.STREAMTYPE_VOICE));
+                vidGlobal.setChecked(Utils.isTransmitAllowed(user, chan, StreamType.STREAMTYPE_VIDEOCAPTURE));
+                deskGlobal.setChecked(Utils.isTransmitAllowed(user, chan, StreamType.STREAMTYPE_DESKTOP));
+                mediaGlobal.setChecked(Utils.isTransmitAllowed(user, chan, StreamType.STREAMTYPE_MEDIAFILE));
+                msgGlobal.setChecked(Utils.isTransmitAllowed(user, chan, StreamType.STREAMTYPE_CHANNELMSG));
+
+                voiceGlobal.setOnClickListener(v -> {
+                    boolean checked = voiceGlobal.isChecked();
+                    Utils.toggleTransmitUsers(user, chan, StreamType.STREAMTYPE_VOICE, checked);
+                    getClient().doUpdateChannel(chan);
+                    announceTransmissionState(getString(R.string.user_prop_title_transmit_voice), checked, true);
+                });
+                vidGlobal.setOnClickListener(v -> {
+                    boolean checked = vidGlobal.isChecked();
+                    Utils.toggleTransmitUsers(user, chan, StreamType.STREAMTYPE_VIDEOCAPTURE, checked);
+                    getClient().doUpdateChannel(chan);
+                    announceTransmissionState(getString(R.string.user_prop_title_transmit_vid), checked, true);
+                });
+                deskGlobal.setOnClickListener(v -> {
+                    boolean checked = deskGlobal.isChecked();
+                    Utils.toggleTransmitUsers(user, chan, StreamType.STREAMTYPE_DESKTOP, checked);
+                    getClient().doUpdateChannel(chan);
+                    announceTransmissionState(getString(R.string.user_prop_title_transmit_desk), checked, true);
+                });
+                mediaGlobal.setOnClickListener(v -> {
+                    boolean checked = mediaGlobal.isChecked();
+                    Utils.toggleTransmitUsers(user, chan, StreamType.STREAMTYPE_MEDIAFILE, checked);
+                    getClient().doUpdateChannel(chan);
+                    announceTransmissionState(getString(R.string.user_prop_title_transmit_media), checked, true);
+                });
+                msgGlobal.setOnClickListener(v -> {
+                    boolean checked = msgGlobal.isChecked();
+                    Utils.toggleTransmitUsers(user, chan, StreamType.STREAMTYPE_CHANNELMSG, checked);
+                    getClient().doUpdateChannel(chan);
+                    announceTransmissionState(getString(R.string.user_prop_title_transmit_chanmsg), checked, true);
+                });
+            }
+        }
+
+        builder.setPositiveButton(android.R.string.ok, null);
+        builder.show();
+    }
+
+    private void announceTransmissionState(String type, boolean enabled, boolean global) {
+        String state = getString(enabled ? R.string.state_enabled : R.string.state_disabled);
+        String scope = getString(global ? R.string.scope_global : R.string.scope_you);
+        String message = getString(R.string.transmission_state_fmt, type, state, scope);
+
+        View root = getWindow().getDecorView();
+        if (root != null && prefs.get("pref_tts_transmission_control", true)) {
+            root.announceForAccessibility(message);
         }
     }
 }

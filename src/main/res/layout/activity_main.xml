@@ -10,12 +10,12 @@
             android:id="@+id/tab_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#33b5e5"
+            android:background="@color/primary_holo_blue"
             android:paddingBottom="4dp"
             android:paddingTop="4dp"
-            android:textColor="#fff" />
+            android:textColor="@color/text_white" />
 
-	<androidx.viewpager.widget.ViewPager
+	<dk.bearware.gui.CustomViewPager
 	    android:id="@+id/pager"
 	    android:layout_width="match_parent"
 	    android:layout_height="wrap_content"
@@ -108,8 +108,8 @@
 
 	    <Button
 	        android:id="@+id/transmit_voice"
-	        android:layout_width="100dp"
-	        android:layout_height="100dp"
+	        android:layout_width="@dimen/tx_button_size"
+	        android:layout_height="@dimen/tx_button_size"
 	        android:layout_alignParentEnd="true"
 	        android:layout_centerVertical="true"
 	        android:background="@android:color/holo_red_light"

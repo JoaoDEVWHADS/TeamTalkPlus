@@ -6,6 +6,8 @@ import android.content.ComponentName;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 import android.util.Log;
+import dk.bearware.gui.R;
+import dk.bearware.gui.BuildConfig;
 
 public class TeamTalkConnection implements ServiceConnection {
 
@@ -30,9 +32,9 @@ public class TeamTalkConnection implements ServiceConnection {
             waitService.notifyAll();
         }
 
-        String s = "TeamTalk instance 0x" +
-                Integer.toHexString(ttservice.getTTInstance().hashCode() & 0xFFFFFFFF) +
-                " running v. " + TeamTalkBase.getVersion() + " connected";
+        String s = ttservice.getString(R.string.tt_instance_info,
+                Integer.toHexString(ttservice.getTTInstance().hashCode() & 0xFFFFFFFF),
+                ttservice.getString(R.string.tt_instance_connected, BuildConfig.VERSION_NAME));
         Log.i(TAG, s);
 
         setBound(true);
@@ -44,9 +46,9 @@ public class TeamTalkConnection implements ServiceConnection {
         ttlistener.onServiceDisconnected(ttservice);
         setBound(false);
 
-        String s = "TeamTalk instance 0x" +
-            Integer.toHexString(ttservice.getTTInstance().hashCode() & 0xFFFFFFFF) +
-            " disconnected";
+        String s = ttservice.getString(R.string.tt_instance_info,
+                Integer.toHexString(ttservice.getTTInstance().hashCode() & 0xFFFFFFFF),
+                ttservice.getString(R.string.tt_instance_disconnected));
         Log.i(TAG, s);
 
         synchronized (waitService) {

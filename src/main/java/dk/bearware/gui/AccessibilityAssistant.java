@@ -3,15 +3,28 @@ package dk.bearware.gui;
 
 import android.app.Activity;
 import android.content.Context;
+import android.os.Bundle;
 import android.util.SparseArray;
 import android.view.View;
-import android.view.View.AccessibilityDelegate;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
 
-public class AccessibilityAssistant extends AccessibilityDelegate {
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.view.AccessibilityDelegateCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class AccessibilityAssistant extends AccessibilityDelegateCompat {
+
+    public interface OnAccessibilityActionClickListener {
+        void onAccessibilityActionClick(View view, int actionId);
+        List<AccessibilityNodeInfoCompat.AccessibilityActionCompat> getCustomActions(View view);
+    }
 
     private final Activity hostActivity;
     private final AccessibilityManager accessibilityService;
@@ -22,6 +35,8 @@ public class AccessibilityAssistant extends AccessibilityDelegate {
 
     private volatile boolean discourageUiUpdates;
     private volatile boolean eventsLocked;
+    
+    private OnAccessibilityActionClickListener actionClickListener;
 
     public AccessibilityAssistant(Activity activity) {
         hostActivity = activity;
@@ -33,13 +48,18 @@ public class AccessibilityAssistant extends AccessibilityDelegate {
         eventsLocked = false;
     }
 
+    public void setOnAccessibilityActionClickListener(OnAccessibilityActionClickListener listener) {
+        this.actionClickListener = listener;
+    }
+
     public boolean isServiceActive() {
         return accessibilityService.isEnabled();
     }
 
     public void shutUp() {
-        if (isServiceActive()) {
-            if (!hostActivity.getWindow().getDecorView().post(accessibilityService::interrupt)) {
+        if (isServiceActive() && hostActivity.getWindow() != null) {
+            View dev = hostActivity.getWindow().getDecorView();
+            if (dev != null && !dev.post(accessibilityService::interrupt)) {
                 accessibilityService.interrupt();
             }
         }
@@ -54,7 +74,12 @@ public class AccessibilityAssistant extends AccessibilityDelegate {
     }
 
     public void unlockEvents() {
-        if (!hostActivity.getWindow().getDecorView().post(() -> eventsLocked = false))
+        if (hostActivity.getWindow() == null) {
+            eventsLocked = false;
+            return;
+        }
+        View dev = hostActivity.getWindow().getDecorView();
+        if (dev == null || !dev.post(() -> eventsLocked = false))
             eventsLocked = false;
     }
 
@@ -62,7 +87,7 @@ public class AccessibilityAssistant extends AccessibilityDelegate {
         monitoredPages.put(id, page);
         if (id == visiblePageId)
             visiblePage = page;
-        page.setAccessibilityDelegate(this);
+        androidx.core.view.ViewCompat.setAccessibilityDelegate(page, this);
     }
 
     public void setVisiblePage(int id) {
@@ -77,18 +102,49 @@ public class AccessibilityAssistant extends AccessibilityDelegate {
 
     @Override
     public void sendAccessibilityEvent(View host, int eventType) {
-        if (host instanceof Button)
-            checkEvent(eventType);
+        checkEvent(eventType);
         if (!eventsLocked)
             super.sendAccessibilityEvent(host, eventType);
     }
 
     @Override
     public void sendAccessibilityEventUnchecked(View host, AccessibilityEvent event) {
-        if (host instanceof Button)
-            checkEvent(event.getEventType());
+        checkEvent(event.getEventType());
         if (!eventsLocked)
             super.sendAccessibilityEventUnchecked(host, event);
+    }
+
+    @Override
+    public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfoCompat info) {
+        super.onInitializeAccessibilityNodeInfo(host, info);
+        if (actionClickListener != null) {
+            List<AccessibilityNodeInfoCompat.AccessibilityActionCompat> actions = actionClickListener.getCustomActions(host);
+            if (actions != null) {
+                for (AccessibilityNodeInfoCompat.AccessibilityActionCompat action : actions) {
+                    info.addAction(action);
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean performAccessibilityAction(View host, int action, Bundle args) {
+        if (actionClickListener != null) {
+            // Check if this is one of our registered custom actions
+            List<AccessibilityNodeInfoCompat.AccessibilityActionCompat> customActions =
+                    actionClickListener.getCustomActions(host);
+            if (customActions != null) {
+                for (AccessibilityNodeInfoCompat.AccessibilityActionCompat ca : customActions) {
+                    if (ca.getId() == action) {
+                        // Dispatch to listener and signal success to TalkBack
+                        actionClickListener.onAccessibilityActionClick(host, action);
+                        return true;
+                    }
+                }
+            }
+        }
+        // Fall through to platform for standard actions (ACTION_CLICK, etc.)
+        return super.performAccessibilityAction(host, action, args);
     }
 
     private void checkEvent(int eventType) {
@@ -103,5 +159,4 @@ public class AccessibilityAssistant extends AccessibilityDelegate {
             break;
         }
     }
-
 }

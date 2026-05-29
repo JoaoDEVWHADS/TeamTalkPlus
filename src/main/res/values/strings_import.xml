@@ -1,0 +1,17 @@
+<resources>
+
+    <string name="title_import_server">Import Server</string>
+    <string name="msg_import_server_confirmation">Do you want to import server: %1$s?</string>
+    <string name="action_import">Import</string>
+    <string name="action_import_connect">Import &amp; Connect</string>
+    <string name="msg_server_imported">Servers imported successfully</string>
+    <string name="err_file_read">Error reading file</string>
+    <string name="title_select_server">Select Server to Open</string>
+    <string name="title_export_servers">Export Servers</string>
+    <string name="msg_choose_export_method">Do you want to export all servers or choose specific ones?</string>
+    <string name="action_export_all">Export All</string>
+    <string name="action_choose_servers">Choose</string>
+    <string name="msg_no_servers_selected">No servers selected.</string>
+    <string name="msg_import_multiple_servers_confirmation">Do you want to import %1$d servers?</string>
+
+</resources>

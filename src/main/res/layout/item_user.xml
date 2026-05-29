@@ -24,7 +24,6 @@
             android:layout_height="wrap_content"
             android:paddingStart="5dp"
             android:paddingEnd="5dp"
-            android:singleLine="true"
             android:textSize="16sp" />
 
         <TextView

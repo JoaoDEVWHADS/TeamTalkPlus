@@ -8,6 +8,7 @@ import android.view.MenuItem;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -22,6 +23,7 @@ import com.google.android.material.tabs.TabLayoutMediator;
 import dk.bearware.ServerProperties;
 import dk.bearware.ServerLogEvent;
 import dk.bearware.TeamTalkBase;
+import dk.bearware.UserType;
 import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
 import dk.bearware.backend.TeamTalkService;
@@ -46,8 +48,8 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
     }
 
     @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
     }
 
     @Override
@@ -127,15 +129,25 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
     @Override
     public void onServiceConnected(TeamTalkService service) {
         if (getClient().getServerProperties(mProps)) {
+            // Determine if the current user has admin rights
+            dk.bearware.User me = service.getUsers().get(getClient().getMyUserID());
+            boolean isAdmin = (me != null && (me.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN);
 
-            refreshFragments();
+            if (!isAdmin) {
+                btnSave.setVisibility(android.view.View.GONE);
+            } else {
+                btnSave.setVisibility(android.view.View.VISIBLE);
+            }
+
+            pagerAdapter.setAdmin(isAdmin);
+            refreshFragments(!isAdmin);
         }
     }
 
-    private void refreshFragments() {
+    private void refreshFragments(boolean readOnly) {
         for (Fragment f : getSupportFragmentManager().getFragments()) {
             if (f instanceof ServerPropFragment) {
-                ((ServerPropFragment) f).refreshUI(mProps);
+                ((ServerPropFragment) f).refreshUI(mProps, readOnly);
             }
         }
     }
@@ -144,14 +156,22 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
     public void onServiceDisconnected(TeamTalkService service) {}
 
     public interface ServerPropFragment {
-        void refreshUI(ServerProperties props);
+        void refreshUI(ServerProperties props, boolean readOnly);
         void updateProperties(ServerProperties props);
     }
 
     private class ServerPropPagerAdapter extends FragmentStateAdapter {
+        private boolean isAdmin = true;
+
         public ServerPropPagerAdapter(AppCompatActivity activity) {
             super(activity);
         }
+        
+        public void setAdmin(boolean admin) {
+            this.isAdmin = admin;
+            notifyDataSetChanged();
+        }
+
         @NonNull @Override
         public Fragment createFragment(int position) {
             switch (position) {
@@ -163,12 +183,13 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             }
         }
         @Override
-        public int getItemCount() { return 4; }
+        public int getItemCount() { return isAdmin ? 4 : 1; }
     }
 
     public static class GeneralPropFragment extends Fragment implements ServerPropFragment {
         EditText editName, editMOTD, editMaxUsers, editMaxLogins, editTcp, editUdp;
         CheckBox chkAutoSave;
+        TextView txtServerVersion;
         @Override
         public android.view.View onCreateView(android.view.LayoutInflater inflater, android.view.ViewGroup container, Bundle savedInstanceState) {
             android.view.View v = inflater.inflate(R.layout.fragment_server_prop_general, container, false);
@@ -179,13 +200,14 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             editTcp = v.findViewById(R.id.edit_server_tcp);
             editUdp = v.findViewById(R.id.edit_server_udp);
             chkAutoSave = v.findViewById(R.id.chk_server_autosave);
+            txtServerVersion = v.findViewById(R.id.text_server_version);
 
             ServerPropActivity activity = (ServerPropActivity) getActivity();
-            if (activity != null && activity.mProps != null) refreshUI(activity.mProps);
+            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, false);
             return v;
         }
         @Override
-        public void refreshUI(ServerProperties props) {
+        public void refreshUI(ServerProperties props, boolean readOnly) {
             if (editName == null) return;
             editName.setText(props.szServerName);
             editMOTD.setText(props.szMOTD);
@@ -194,6 +216,19 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             editTcp.setText(String.valueOf(props.nTcpPort));
             editUdp.setText(String.valueOf(props.nUdpPort));
             chkAutoSave.setChecked(props.bAutoSave);
+            if (txtServerVersion != null) {
+                String ver = (props.szServerVersion != null && !props.szServerVersion.isEmpty())
+                    ? props.szServerVersion : "—";
+                txtServerVersion.setText(ver);
+            }
+            boolean editable = !readOnly;
+            editName.setEnabled(editable);
+            editMOTD.setEnabled(editable);
+            editMaxUsers.setEnabled(editable);
+            editMaxLogins.setEnabled(editable);
+            editTcp.setEnabled(editable);
+            editUdp.setEnabled(editable);
+            chkAutoSave.setEnabled(editable);
         }
         @Override
         public void updateProperties(ServerProperties props) {
@@ -221,17 +256,21 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             editDesktop = v.findViewById(R.id.edit_max_desktop);
             editTotal = v.findViewById(R.id.edit_max_total);
             ServerPropActivity activity = (ServerPropActivity) getActivity();
-            if (activity != null && activity.mProps != null) refreshUI(activity.mProps);
+            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, false);
             return v;
         }
         @Override
-        public void refreshUI(ServerProperties props) {
+        public void refreshUI(ServerProperties props, boolean readOnly) {
             if (editVoice == null) return;
             editVoice.setText(String.valueOf(props.nMaxVoiceTxPerSecond));
             editVideo.setText(String.valueOf(props.nMaxVideoCaptureTxPerSecond));
             editMedia.setText(String.valueOf(props.nMaxMediaFileTxPerSecond));
             editDesktop.setText(String.valueOf(props.nMaxDesktopTxPerSecond));
             editTotal.setText(String.valueOf(props.nMaxTotalTxPerSecond));
+            boolean editable = !readOnly;
+            editVoice.setEnabled(editable); editVideo.setEnabled(editable);
+            editMedia.setEnabled(editable); editDesktop.setEnabled(editable);
+            editTotal.setEnabled(editable);
         }
         @Override
         public void updateProperties(ServerProperties props) {
@@ -255,15 +294,19 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             editDelay = v.findViewById(R.id.edit_login_delay);
             editTimeout = v.findViewById(R.id.edit_user_timeout);
             ServerPropActivity activity = (ServerPropActivity) getActivity();
-            if (activity != null && activity.mProps != null) refreshUI(activity.mProps);
+            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, false);
             return v;
         }
         @Override
-        public void refreshUI(ServerProperties props) {
+        public void refreshUI(ServerProperties props, boolean readOnly) {
             if (editAttempts == null) return;
             editAttempts.setText(String.valueOf(props.nMaxLoginAttempts));
             editDelay.setText(String.valueOf(props.nLoginDelayMSec));
             editTimeout.setText(String.valueOf(props.nUserTimeout));
+            boolean editable = !readOnly;
+            editAttempts.setEnabled(editable);
+            editDelay.setEnabled(editable);
+            editTimeout.setEnabled(editable);
         }
         @Override
         public void updateProperties(ServerProperties props) {
@@ -287,11 +330,11 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             chkSrv = v.findViewById(R.id.chk_log_server_update);
             chkFile = v.findViewById(R.id.chk_log_file_transfer);
             ServerPropActivity activity = (ServerPropActivity) getActivity();
-            if (activity != null && activity.mProps != null) refreshUI(activity.mProps);
+            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, false);
             return v;
         }
         @Override
-        public void refreshUI(ServerProperties props) {
+        public void refreshUI(ServerProperties props, boolean readOnly) {
             if (chkLogin == null) return;
             int e = props.uServerLogEvents;
             chkLogin.setChecked((e & (ServerLogEvent.SERVERLOGEVENT_USER_CONNECTED | ServerLogEvent.SERVERLOGEVENT_USER_DISCONNECTED)) != 0);
@@ -299,6 +342,10 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             chkChan.setChecked((e & (ServerLogEvent.SERVERLOGEVENT_CHANNEL_CREATED | ServerLogEvent.SERVERLOGEVENT_CHANNEL_UPDATED)) != 0);
             chkSrv.setChecked((e & ServerLogEvent.SERVERLOGEVENT_SERVER_UPDATED) != 0);
             chkFile.setChecked((e & ServerLogEvent.SERVERLOGEVENT_FILE_UPLOADED) != 0);
+            boolean editable = !readOnly;
+            chkLogin.setEnabled(editable); chkKick.setEnabled(editable);
+            chkChan.setEnabled(editable); chkSrv.setEnabled(editable);
+            chkFile.setEnabled(editable);
         }
         @Override
         public void updateProperties(ServerProperties props) {

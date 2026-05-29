@@ -1,0 +1,17 @@
+<resources>
+
+    <string name="title_import_server">导入服务器</string>
+    <string name="msg_import_server_confirmation">您要导入服务器吗：%1$s？</string>
+    <string name="action_import">导入</string>
+    <string name="action_import_connect">导入并连接</string>
+    <string name="msg_server_imported">服务器导入成功</string>
+    <string name="err_file_read">读取文件出错</string>
+    <string name="title_select_server">选择要打开的服务器</string>
+    <string name="title_export_servers">导出服务器</string>
+    <string name="msg_choose_export_method">您要导出所有服务器还是选择特定服务器？</string>
+    <string name="action_export_all">导出全部</string>
+    <string name="action_choose_servers">选择</string>
+    <string name="msg_no_servers_selected">未选择服务器。</string>
+    <string name="msg_import_multiple_servers_confirmation">您要导入 %1$d 个服务器吗？</string>
+
+</resources>

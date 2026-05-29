@@ -1,12 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <Preference
+        android:key="pref_master_sound_toggle"
+        android:title="@string/action_select_all" />
 
 
     <ListPreference
         android:key="pref_sound_pack"
         android:title="@string/pref_title_sound_pack"
         android:summary="@string/pref_summary_sound_pack"
-        android:defaultValue="Default" />
+        android:defaultValue="Default Windows" />
 
     <CheckBoxPreference
 
@@ -59,6 +62,12 @@
 		/>
     <CheckBoxPreference
         android:defaultValue="true"
+        android:key="user_message_sent_audio_icon"
+        android:title="@string/pref_title_user_message_sent_audio_icon"
+        android:summary="@string/pref_summary_user_message_sent_audio_icon"
+        />
+    <CheckBoxPreference
+        android:defaultValue="true"
         android:key="channel_message_audio_icon"
         android:title="@string/pref_title_channel_message_audio_icon"
         android:summary="@string/pref_summary_channel_message_audio_icon"
@@ -89,6 +98,20 @@
         />
     <CheckBoxPreference
         android:defaultValue="true"
+        android:key="pref_sound_server_login"
+        android:title="@string/pref_title_server_login_icon"
+        android:summary="@string/pref_summary_server_login_icon"
+        />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="pref_sound_server_logout"
+        android:title="@string/pref_title_server_logout_icon"
+        android:summary="@string/pref_summary_server_logout_icon"
+        />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
         android:key="userloggedin_icon"
         android:title="@string/pref_title_userloggedin_icon"
         android:summary="@string/pref_summary_userloggedin_icon"
@@ -104,6 +127,46 @@
         android:key="mute_all_audio_icon"
         android:title="@string/pref_title_mute_all_audio_icon"
         android:summary="@string/pref_summary_mute_all_audio_icon"
+        />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="unmute_all_audio_icon"
+        android:title="@string/pref_title_unmute_all_audio_icon"
+        android:summary="@string/pref_summary_unmute_all_audio_icon"
+        />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="pref_sound_myself_join"
+        android:title="@string/pref_title_myself_join_icon"
+        android:summary="@string/pref_summary_myself_join_icon"
+        />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="pref_sound_myself_leave"
+        android:summary="@string/pref_summary_myself_leave_icon"
+        android:title="@string/pref_title_myself_leave_icon" />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="typing_audio_icon"
+        android:title="@string/pref_soundevent_typing"
+        android:summary="@string/pref_soundevent_typing_summ"
+        />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="pref_sound_app_open"
+        android:title="@string/pref_title_sound_app_open"
+        android:summary="@string/pref_summary_sound_app_open"
+        />
+    <CheckBoxPreference
+        android:defaultValue="false"
+        android:key="pref_sound_accessibility_volume"
+        android:title="@string/pref_title_sound_accessibility_volume"
+        android:summary="@string/pref_summary_sound_accessibility_volume"
         />
 
 </PreferenceScreen>

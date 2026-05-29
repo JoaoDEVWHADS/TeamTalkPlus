@@ -1,16 +1,22 @@
 package dk.bearware.gui;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.method.HideReturnsTransformationMethod;
+import android.text.method.PasswordTransformationMethod;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -46,22 +52,37 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
     public static final String EXTRA_USERTYPE = "usertype";
     public static final String EXTRA_USERRIGHTS = "userrights";
     public static final String EXTRA_NOTE = "note";
+    public static final String EXTRA_INIT_CHANNEL = "init_channel";
+    public static final String EXTRA_OPERATOR_CHANNELS = "operator_channels";
     public static final String EXTRA_IS_EDIT = "is_edit";
+    public static final String EXTRA_IS_VIEW = "is_view";
 
     private TabLayout tabLayout;
     private ViewPager2 viewPager;
     private Button btnSave;
     private AccountPagerAdapter pagerAdapter;
+    private TabLayoutMediator tabLayoutMediator;
+    private List<TabItem> activeTabs = new ArrayList<>();
     private UserAccount mAccount = new UserAccount();
+
+    private static class TabItem {
+        int titleRes;
+        Class<? extends Fragment> fragmentClass;
+        TabItem(int titleRes, Class<? extends Fragment> fragmentClass) {
+            this.titleRes = titleRes;
+            this.fragmentClass = fragmentClass;
+        }
+    }
 
     private TeamTalkConnection ttConnection;
     private boolean isEdit = false;
+    private boolean isView = false;
+
 
     @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
     }
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,30 +101,76 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
         btnSave = findViewById(R.id.btn_save_account);
 
         isEdit = getIntent().getBooleanExtra(EXTRA_IS_EDIT, false);
-        if (isEdit) {
+        isView = getIntent().getBooleanExtra(EXTRA_IS_VIEW, false);
+        
+        if (isView) {
+            btnSave.setVisibility(View.GONE);
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setTitle(R.string.action_view_account);
+            }
+        }
+        
+        if (isEdit || isView) {
             mAccount.szUsername = getIntent().getStringExtra(EXTRA_USERNAME);
             mAccount.szPassword = getIntent().getStringExtra(EXTRA_PASSWORD);
             mAccount.uUserType = getIntent().getIntExtra(EXTRA_USERTYPE, UserType.USERTYPE_DEFAULT);
             mAccount.uUserRights = getIntent().getIntExtra(EXTRA_USERRIGHTS, UserRight.USERRIGHT_NONE);
             mAccount.szNote = getIntent().getStringExtra(EXTRA_NOTE);
+            mAccount.szInitChannel = getIntent().getStringExtra(EXTRA_INIT_CHANNEL);
+            mAccount.autoOperatorChannels = getIntent().getIntArrayExtra(EXTRA_OPERATOR_CHANNELS);
+            if (mAccount.autoOperatorChannels == null) {
+                mAccount.autoOperatorChannels = new int[dk.bearware.Constants.TT_CHANNELS_OPERATOR_MAX];
+            }
+        } else {
+            mAccount.uUserType = UserType.USERTYPE_DEFAULT;
+            mAccount.uUserRights = UserRight.USERRIGHT_DEFAULT;
         }
 
         pagerAdapter = new AccountPagerAdapter(this);
         viewPager.setAdapter(pagerAdapter);
         viewPager.setOffscreenPageLimit(5); 
 
-        new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
-            switch (position) {
-                case 0: tab.setText(R.string.tab_basic_info); break;
-                case 1: tab.setText(R.string.tab_user_rights); break;
-                case 2: tab.setText(R.string.tab_channel_operator); break;
-                case 3: tab.setText(R.string.tab_codec_limitations); break;
-                case 4: tab.setText(R.string.tab_abuse_prevention); break;
-            }
-        }).attach();
 
         ttConnection = new TeamTalkConnection(this);
         btnSave.setOnClickListener(v -> saveAccount());
+
+        updateTabs();
+    }
+
+    public void updateTabs() {
+        activeTabs.clear();
+        activeTabs.add(new TabItem(R.string.tab_basic_info, BasicInfoFragment.class));
+        
+        if ((mAccount.uUserType & UserType.USERTYPE_ADMIN) == 0 && mAccount.uUserType != UserType.USERTYPE_NONE) {
+            activeTabs.add(new TabItem(R.string.tab_user_rights, UserRightsFragment.class));
+        }
+        
+        activeTabs.add(new TabItem(R.string.tab_channel_operator, ChannelOperatorFragment.class));
+        activeTabs.add(new TabItem(R.string.tab_codec_limitations, CodecLimitFragment.class));
+        activeTabs.add(new TabItem(R.string.tab_abuse_prevention, AbusePreventFragment.class));
+
+        if (pagerAdapter != null) {
+            pagerAdapter.notifyDataSetChanged();
+            if (tabLayoutMediator != null) tabLayoutMediator.detach();
+            tabLayoutMediator = new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
+                if (position < activeTabs.size()) {
+                    tab.setText(activeTabs.get(position).titleRes);
+                }
+            });
+            tabLayoutMediator.attach();
+        }
+    }
+
+    public void applyDefaultRightsIfEmpty() {
+        if (mAccount.uUserRights == UserRight.USERRIGHT_NONE) {
+            mAccount.uUserRights = UserRight.USERRIGHT_DEFAULT;
+            List<Fragment> fragments = getSupportFragmentManager().getFragments();
+            for (Fragment f : fragments) {
+                if (f instanceof UserRightsFragment) {
+                    ((UserRightsFragment) f).refreshRights(mAccount.uUserRights);
+                }
+            }
+        }
     }
 
     @Override
@@ -134,8 +201,7 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
             return;
         }
 
-        for (int i = 0; i < pagerAdapter.getItemCount(); i++) {
-            Fragment f = getSupportFragmentManager().findFragmentByTag("f" + i);
+        for (Fragment f : getSupportFragmentManager().getFragments()) {
             if (f instanceof AccountEditFragment) {
                 ((AccountEditFragment) f).updateAccount(mAccount);
             }
@@ -163,19 +229,29 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
 
         @NonNull @Override
         public Fragment createFragment(int position) {
-            switch (position) {
-                case 0: return new BasicInfoFragment();
-                case 1: return new UserRightsFragment();
-                case 2: return new ChannelOperatorFragment();
-                case 3: return new CodecLimitFragment();
-                case 4: return new AbusePreventFragment();
-                default: return new BasicInfoFragment();
+            try {
+                return activeTabs.get(position).fragmentClass.newInstance();
+            } catch (Exception e) {
+                return new BasicInfoFragment();
             }
         }
 
         @Override
         public int getItemCount() {
-            return 5;
+            return activeTabs.size();
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return activeTabs.get(position).titleRes;
+        }
+
+        @Override
+        public boolean containsItem(long itemId) {
+            for (TabItem item : activeTabs) {
+                if (item.titleRes == itemId) return true;
+            }
+            return false;
         }
     }
 
@@ -197,55 +273,123 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
             UserAccountEditActivity activity = (UserAccountEditActivity) getActivity();
             if (activity != null) {
                 editUser.setText(activity.mAccount.szUsername);
-                if (activity.isEdit) editUser.setEnabled(false);
+                if (activity.isEdit || activity.isView) editUser.setEnabled(false);
                 editPass.setText(activity.mAccount.szPassword);
                 editNote.setText(activity.mAccount.szNote);
                 editInitChan.setText(activity.mAccount.szInitChannel);
-                if (activity.mAccount.uUserType == UserType.USERTYPE_ADMIN) ((RadioButton)v.findViewById(R.id.radio_type_admin)).setChecked(true);
+                if ((activity.mAccount.uUserType & UserType.USERTYPE_ADMIN) != 0) ((RadioButton)v.findViewById(R.id.radio_type_admin)).setChecked(true);
                 else if (activity.mAccount.uUserType == UserType.USERTYPE_NONE) {
                     ((RadioButton)v.findViewById(R.id.radio_type_none)).setChecked(true);
                     noteDisabled.setVisibility(View.VISIBLE);
                 }
                 else ((RadioButton)v.findViewById(R.id.radio_type_default)).setChecked(true);
 
+                if (activity.isView) {
+                    editPass.setEnabled(false);
+                    editNote.setEnabled(false);
+                    editInitChan.setEnabled(false);
+                    for (int i = 0; i < typeGroup.getChildCount(); i++) {
+                        typeGroup.getChildAt(i).setEnabled(false);
+                    }
+                }
+
                 editInitChan.setOnClickListener(view -> showChannelSelectionDialog(activity));
                 typeGroup.setOnCheckedChangeListener((group, checkedId) -> {
-                    if (checkedId == R.id.radio_type_none) noteDisabled.setVisibility(View.VISIBLE);
-                    else noteDisabled.setVisibility(View.GONE);
+                    if (checkedId == R.id.radio_type_none) {
+                        activity.mAccount.uUserType = UserType.USERTYPE_NONE;
+                        noteDisabled.setVisibility(View.VISIBLE);
+                    } else {
+                        noteDisabled.setVisibility(View.GONE);
+                        if (checkedId == R.id.radio_type_default) {
+                            activity.mAccount.uUserType = UserType.USERTYPE_DEFAULT;
+                            activity.applyDefaultRightsIfEmpty();
+                        } else if (checkedId == R.id.radio_type_admin) {
+                            activity.mAccount.uUserType = UserType.USERTYPE_ADMIN;
+                        }
+                    }
+                    activity.updateTabs();
                 });
+
+                ImageButton btnToggle = v.findViewById(R.id.btn_toggle_password);
+                ImageButton btnCopyUser = v.findViewById(R.id.btn_copy_username);
+                ImageButton btnCopy = v.findViewById(R.id.btn_copy_password);
+                ImageButton btnCopyNote = v.findViewById(R.id.btn_copy_note);
+                
+                if (btnToggle != null) {
+                    if (activity.isView) {
+                        btnToggle.setVisibility(View.GONE);
+                    } else {
+                        btnToggle.setTag(false);
+                        btnToggle.setOnClickListener(view -> {
+                            boolean visible = (Boolean) btnToggle.getTag();
+                            editPass.setTransformationMethod(visible
+                                ? PasswordTransformationMethod.getInstance()
+                                : HideReturnsTransformationMethod.getInstance());
+                            btnToggle.setTag(!visible);
+                            editPass.setSelection(editPass.getText().length());
+                        });
+                    }
+                }
+                if (btnCopyUser != null) {
+                    if (activity.isView) {
+                        btnCopyUser.setVisibility(View.VISIBLE);
+                        btnCopyUser.setOnClickListener(view -> {
+                            ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                            ClipData clip = ClipData.newPlainText(activity.getString(R.string.action_copy_username), editUser.getText().toString());
+                            clipboard.setPrimaryClip(clip);
+                            Toast.makeText(activity, R.string.msg_username_copied, Toast.LENGTH_SHORT).show(); 
+                        });
+                    } else {
+                        btnCopyUser.setVisibility(View.GONE);
+                    }
+                }
+                if (btnCopy != null) {
+                    if (activity.isView) {
+                        btnCopy.setVisibility(View.VISIBLE);
+                        btnCopy.setOnClickListener(view -> {
+                            ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                            ClipData clip = ClipData.newPlainText(activity.getString(R.string.action_copy_password), editPass.getText().toString());
+                            clipboard.setPrimaryClip(clip);
+                            Toast.makeText(activity, R.string.msg_password_copied, Toast.LENGTH_SHORT).show();
+                        });
+                    } else {
+                        btnCopy.setVisibility(View.GONE);
+                    }
+                }
+                if (btnCopyNote != null) {
+                    if (activity.isView) {
+                        btnCopyNote.setVisibility(View.VISIBLE);
+                        btnCopyNote.setOnClickListener(view -> {
+                            ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                            ClipData clip = ClipData.newPlainText(activity.getString(R.string.action_copy_note), editNote.getText().toString());
+                            clipboard.setPrimaryClip(clip);
+                            Toast.makeText(activity, R.string.msg_note_copied, Toast.LENGTH_SHORT).show();
+                        });
+                    } else {
+                        btnCopyNote.setVisibility(View.GONE);
+                    }
+                }
+
+                ImageButton btnClear = v.findViewById(R.id.btn_clear_init_chan);
+                if (btnClear != null) {
+                    if (activity.isView) {
+                        btnClear.setVisibility(View.GONE);
+                    } else {
+                        btnClear.setOnClickListener(view -> editInitChan.setText(""));
+                    }
+                }
             }
             return v;
         }
 
         private void showChannelSelectionDialog(UserAccountEditActivity activity) {
-            if (activity.ttConnection.getService() == null) return;
-            Vector<Channel> channels = new Vector<>();
-            IntPtr n = new IntPtr();
-            if (activity.ttConnection.getService().getTTInstance().getServerChannels(null, n)) {
-                Channel[] channelArray = new Channel[n.value];
-                if (activity.ttConnection.getService().getTTInstance().getServerChannels(channelArray, n)) {
-                    for(int i=0;i<n.value;i++)
-                        channels.add(channelArray[i]);
-                }
-            }
+            TeamTalkService service = activity.ttConnection.getService();
+            if (service == null) return;
 
-            String[] channelNames = new String[channels.size() + 1];
-            String[] channelPaths = new String[channels.size() + 1];
-            channelNames[0] = "Root";
-            channelPaths[0] = "/";
-
-            for(int i=0; i<channels.size(); i++) {
-                Channel c = channels.get(i);
-                channelNames[i+1] = activity.ttConnection.getService().getTTInstance().getChannelPath(c.nChannelID);
-                channelPaths[i+1] = channelNames[i+1];
-            }
-
-            new AlertDialog.Builder(activity)
-                .setTitle(R.string.init_channel_select)
-                .setItems(channelNames, (dialog, which) -> {
-                    editInitChan.setText(channelPaths[which]);
-                })
-                .show();
+            Utils.showChannelPicker(activity, service, R.string.init_channel_select, 0, 0, (channelId, channelName) -> {
+                String path = service.getTTInstance().getChannelPath(channelId);
+                editInitChan.setText(path != null && !path.isEmpty() ? path : "/");
+            });
         }
 
         @Override
@@ -296,31 +440,7 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
 
             UserAccountEditActivity activity = (UserAccountEditActivity) getActivity();
             if (activity != null) {
-                int r = activity.mAccount.uUserRights;
-                chkML.setChecked((r & UserRight.USERRIGHT_MULTI_LOGIN) != 0);
-                chkCN.setChecked((r & UserRight.USERRIGHT_LOCKED_NICKNAME) == 0); 
-                chkVA.setChecked((r & UserRight.USERRIGHT_VIEW_ALL_USERS) != 0);
-
-                chkCC.setChecked((r & UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL) != 0);
-                chkMC.setChecked((r & UserRight.USERRIGHT_MODIFY_CHANNELS) != 0);
-
-                chkK.setChecked((r & UserRight.USERRIGHT_KICK_USERS) != 0);
-                chkB.setChecked((r & UserRight.USERRIGHT_BAN_USERS) != 0);
-
-                chkU.setChecked((r & UserRight.USERRIGHT_UPLOAD_FILES) != 0);
-                chkD.setChecked((r & UserRight.USERRIGHT_DOWNLOAD_FILES) != 0);
-                chkRec.setChecked((r & UserRight.USERRIGHT_RECORD_VOICE) != 0);
-                chkV.setChecked((r & UserRight.USERRIGHT_TRANSMIT_VOICE) != 0);
-                chkVid.setChecked((r & UserRight.USERRIGHT_TRANSMIT_VIDEOCAPTURE) != 0);
-                chkDsk.setChecked((r & UserRight.USERRIGHT_TRANSMIT_DESKTOP) != 0);
-                chkDskAcc.setChecked((r & UserRight.USERRIGHT_TRANSMIT_DESKTOPINPUT) != 0);
-                chkMA.setChecked((r & UserRight.USERRIGHT_TRANSMIT_MEDIAFILE_AUDIO) != 0);
-                chkMV.setChecked((r & UserRight.USERRIGHT_TRANSMIT_MEDIAFILE_VIDEO) != 0);
-                chkTU.setChecked((r & UserRight.USERRIGHT_TEXTMESSAGE_USER) != 0);
-                chkTC.setChecked((r & UserRight.USERRIGHT_TEXTMESSAGE_CHANNEL) != 0);
-                chkTB.setChecked((r & UserRight.USERRIGHT_TEXTMESSAGE_BROADCAST) != 0);
-
-                if ((r & UserRight.USERRIGHT_ALL) == UserRight.USERRIGHT_ALL) chkAll.setChecked(true);
+                refreshRights(activity.mAccount.uUserRights);
             }
 
             chkAll.setOnCheckedChangeListener((cb, checked) -> {
@@ -337,19 +457,50 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
             return v;
         }
 
+        public void refreshRights(int r) {
+            if (chkML == null) return;
+            chkML.setChecked((r & UserRight.USERRIGHT_MULTI_LOGIN) != 0);
+            chkCN.setChecked((r & UserRight.USERRIGHT_LOCKED_NICKNAME) == 0);
+            chkVA.setChecked((r & UserRight.USERRIGHT_VIEW_ALL_USERS) != 0);
+            chkVC.setChecked((r & UserRight.USERRIGHT_VIEW_HIDDEN_CHANNELS) != 0);
+            chkCC.setChecked((r & UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL) != 0);
+            chkMC.setChecked((r & UserRight.USERRIGHT_MODIFY_CHANNELS) != 0);
+            chkESP.setChecked((r & UserRight.USERRIGHT_UPDATE_SERVERPROPERTIES) != 0);
+            chkK.setChecked((r & UserRight.USERRIGHT_KICK_USERS) != 0);
+            chkB.setChecked((r & UserRight.USERRIGHT_BAN_USERS) != 0);
+            chkMU.setChecked((r & UserRight.USERRIGHT_MOVE_USERS) != 0);
+            chkOE.setChecked((r & UserRight.USERRIGHT_OPERATOR_ENABLE) != 0);
+            chkU.setChecked((r & UserRight.USERRIGHT_UPLOAD_FILES) != 0);
+            chkD.setChecked((r & UserRight.USERRIGHT_DOWNLOAD_FILES) != 0);
+            chkRec.setChecked((r & UserRight.USERRIGHT_RECORD_VOICE) != 0);
+            chkV.setChecked((r & UserRight.USERRIGHT_TRANSMIT_VOICE) != 0);
+            chkVid.setChecked((r & UserRight.USERRIGHT_TRANSMIT_VIDEOCAPTURE) != 0);
+            chkDsk.setChecked((r & UserRight.USERRIGHT_TRANSMIT_DESKTOP) != 0);
+            chkDskAcc.setChecked((r & UserRight.USERRIGHT_TRANSMIT_DESKTOPINPUT) != 0);
+            chkMA.setChecked((r & UserRight.USERRIGHT_TRANSMIT_MEDIAFILE_AUDIO) != 0);
+            chkMV.setChecked((r & UserRight.USERRIGHT_TRANSMIT_MEDIAFILE_VIDEO) != 0);
+            chkTU.setChecked((r & UserRight.USERRIGHT_TEXTMESSAGE_USER) != 0);
+            chkTC.setChecked((r & UserRight.USERRIGHT_TEXTMESSAGE_CHANNEL) != 0);
+            chkTB.setChecked((r & UserRight.USERRIGHT_TEXTMESSAGE_BROADCAST) != 0);
+            if ((r & UserRight.USERRIGHT_ALL) == UserRight.USERRIGHT_ALL) chkAll.setChecked(true);
+        }
+
         @Override
         public void updateAccount(UserAccount acc) {
             if (chkML == null) return;
             int r = 0;
             if (chkML.isChecked()) r |= UserRight.USERRIGHT_MULTI_LOGIN;
             if (!chkCN.isChecked()) r |= UserRight.USERRIGHT_LOCKED_NICKNAME; 
-            if (chkVA.isChecked()) r |= UserRight.USERRIGHT_VIEW_ALL_USERS;
-
-            if (chkCC.isChecked()) r |= UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL;
+            if (chkVA.isChecked())    r |= UserRight.USERRIGHT_VIEW_ALL_USERS;
+            if (chkVC.isChecked())    r |= UserRight.USERRIGHT_VIEW_HIDDEN_CHANNELS;
+            if (chkCC.isChecked())    r |= UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL;
             if (chkMC.isChecked()) r |= UserRight.USERRIGHT_MODIFY_CHANNELS;
+            if (chkESP.isChecked()) r |= UserRight.USERRIGHT_UPDATE_SERVERPROPERTIES;
 
             if (chkK.isChecked()) r |= UserRight.USERRIGHT_KICK_USERS;
             if (chkB.isChecked()) r |= UserRight.USERRIGHT_BAN_USERS;
+            if (chkMU.isChecked()) r |= UserRight.USERRIGHT_MOVE_USERS;
+            if (chkOE.isChecked()) r |= UserRight.USERRIGHT_OPERATOR_ENABLE;
 
             if (chkU.isChecked()) r |= UserRight.USERRIGHT_UPLOAD_FILES;
             if (chkD.isChecked()) r |= UserRight.USERRIGHT_DOWNLOAD_FILES;
@@ -408,38 +559,15 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
         }
 
         private void showChannelAddDialog(UserAccountEditActivity activity) {
-             if (activity.ttConnection.getService() == null) return;
-            Vector<Channel> channels = new Vector<>();
-            IntPtr n = new IntPtr();
-            if (activity.ttConnection.getService().getTTInstance().getServerChannels(null, n)) {
-                Channel[] channelArray = new Channel[n.value];
-                if (activity.ttConnection.getService().getTTInstance().getServerChannels(channelArray, n)) {
-                    for(int i=0;i<n.value;i++)
-                        channels.add(channelArray[i]);
-                }
-            }
+            TeamTalkService service = activity.ttConnection.getService();
+            if (service == null) return;
 
-            List<Channel> available = new ArrayList<>();
-            List<String> names = new ArrayList<>();
-            for (Channel c : channels) {
-                if (!channelIds.contains(c.nChannelID)) {
-                    available.add(c);
-                    names.add(activity.ttConnection.getService().getTTInstance().getChannelPath(c.nChannelID));
-                }
-            }
-
-            if (available.isEmpty()) {
-                Toast.makeText(activity, R.string.err_no_channels_available, Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            new AlertDialog.Builder(activity)
-                .setTitle(R.string.title_add_operator_channel)
-                .setItems(names.toArray(new String[0]), (dialog, which) -> {
-                    channelIds.add(available.get(which).nChannelID);
+            Utils.showChannelPicker(activity, service, R.string.title_add_operator_channel, 0, 0, (channelId, channelName) -> {
+                if (!channelIds.contains(channelId)) {
+                    channelIds.add(channelId);
                     updateList(activity);
-                })
-                .show();
+                }
+            });
         }
 
         @Override
@@ -459,7 +587,8 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
             editBps = v.findViewById(R.id.edit_account_bps_limit);
             UserAccountEditActivity activity = (UserAccountEditActivity) getActivity();
             if (activity != null) {
-                editBps.setText(String.valueOf(activity.mAccount.nAudioCodecBpsLimit));
+                int val = activity.mAccount.nAudioCodecBpsLimit;
+                editBps.setText(String.valueOf(val));
             }
             return v;
         }

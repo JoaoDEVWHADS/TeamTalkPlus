@@ -6,11 +6,16 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
+import androidx.core.view.ViewCompat;
 
 import androidx.annotation.NonNull;
+import androidx.core.view.AccessibilityDelegateCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import android.os.Bundle;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import dk.bearware.Channel;
 import dk.bearware.User;
@@ -19,10 +24,12 @@ import dk.bearware.backend.TeamTalkService;
 public class OnlineUsersAdapter extends ArrayAdapter<User> {
     private final LayoutInflater inflater;
     private final TeamTalkService service;
+    private final AccessibilityAssistant accessibilityAssistant;
 
-    public OnlineUsersAdapter(Context context, TeamTalkService service, List<User> users) {
-        super(context, android.R.layout.simple_list_item_1);
+    public OnlineUsersAdapter(Context context, TeamTalkService service, List<User> users, AccessibilityAssistant accessibilityAssistant) {
+        super(context, R.layout.item_online_user);
         this.service = service;
+        this.accessibilityAssistant = accessibilityAssistant;
         inflater = LayoutInflater.from(context);
         updateUsers(users);
     }
@@ -71,7 +78,7 @@ public class OnlineUsersAdapter extends ArrayAdapter<User> {
         while(current != null) {
             if(current.nChannelID == 0) {
                  path.insert(0, getContext().getString(R.string.init_channel));
-                 path.insert(0, "/"); 
+                 path.insert(0, getContext().getString(R.string.path_delimiter)); 
                  
                  
                  
@@ -79,7 +86,7 @@ public class OnlineUsersAdapter extends ArrayAdapter<User> {
                  break;
             }
             path.insert(0, current.szName);
-            path.insert(0, "/");
+            path.insert(0, getContext().getString(R.string.path_delimiter));
             
             if(current.nParentID == 0) {
                  
@@ -89,7 +96,7 @@ public class OnlineUsersAdapter extends ArrayAdapter<User> {
                  Channel root = service.getChannels().get(0);
                  String rootName = (root != null) ? getContext().getString(R.string.init_channel) : "Root";
                  path.insert(0, rootName);
-                 path.insert(0, "/");
+                 path.insert(0, getContext().getString(R.string.path_delimiter));
                  break;
             }
             current = service.getChannels().get(current.nParentID);
@@ -109,60 +116,67 @@ public class OnlineUsersAdapter extends ArrayAdapter<User> {
         
         String pName = c.szName;
         if(c.nParentID != 0) {
-            return getFullChannelPath(c.nParentID) + "/" + pName;
+            return getFullChannelPath(c.nParentID) + getContext().getString(R.string.path_delimiter) + pName;
         } else {
-            
-            return getContext().getString(R.string.init_channel) + "/" + pName;
+            return getContext().getString(R.string.init_channel) + getContext().getString(R.string.path_delimiter) + pName;
         }
     }
 
     @NonNull
     @Override
     public View getView(int position, View convertView, @NonNull ViewGroup parent) {
+        ViewHolder holder;
         if (convertView == null) {
-            convertView = inflater.inflate(android.R.layout.simple_list_item_1, parent, false);
+            convertView = inflater.inflate(R.layout.item_online_user, parent, false);
+            holder = new ViewHolder();
+            holder.nickname = (TextView) convertView.findViewById(R.id.nickname);
+            convertView.setTag(holder);
+        } else {
+            holder = (ViewHolder) convertView.getTag();
         }
 
-        TextView textView = convertView.findViewById(android.R.id.text1);
         User user = getItem(position);
-
         if (user != null) {
-            StringBuilder sb = new StringBuilder();
-            
-            
-            
-            
-            
-            
-            
-            
+            boolean isOperator = service.getTTInstance().isChannelOperator(user.nUserID, user.nChannelID);
             String nickname = dk.bearware.gui.Utils.getDisplayName(getContext(), user);
-            
-            sb.append(getContext().getString(R.string.online_user_info_nickname)).append(": ").append(nickname);
-            
-            
-            sb.append(", ").append(getContext().getString(R.string.online_user_info_statusmsg)).append(": ").append(user.szStatusMsg);
-            
-            
-            sb.append(", ").append(getContext().getString(R.string.online_list_username)).append(": ").append(user.szUsername);
-            
-            
-            String channelPath = getFullChannelPath(user.nChannelID);
-            sb.append(", ").append(getContext().getString(R.string.online_user_info_channel)).append(": ").append(channelPath);
-            
-            
-            sb.append(", ").append(getContext().getString(R.string.online_user_info_ip)).append(": ").append(user.szIPAddress);
-            
-            
-            String clientVersion = ((user.uVersion >> 16) & 0xFF) + "." + ((user.uVersion >> 8) & 0xFF) + "." + (user.uVersion & 0xFF);
-            sb.append(", ").append(getContext().getString(R.string.online_list_version)).append(": ").append(clientVersion); 
-            
-            
-            sb.append(", ").append(getContext().getString(R.string.online_list_id)).append(": ").append(user.nUserID);
+            if (isOperator) nickname += " (Op)";
+            String status = (user.szStatusMsg != null) ? user.szStatusMsg : "";
+            String username = (user.szUsername != null) ? user.szUsername : "";
+            String channel = getFullChannelPath(user.nChannelID);
+            String ip = (user.szIPAddress != null) ? user.szIPAddress : "";
+            String version = String.format(Locale.ROOT, "%d.%d.%d", (user.uVersion >> 16) & 0xFF, (user.uVersion >> 8) & 0xFF, user.uVersion & 0xFF);
+            int identifier = user.nUserID;
 
-            textView.setText(sb.toString());
+            // Simplified formatting: Nickname (#ID) - Status [Username]
+            // Followed by Channel and Metadata. 
+            // Removed the redundant "User ID: ID" at the end.
+            // User specified exact format: Apelido: %, Mensagem de Status: %, Usuário: %, Canal: %, Endereço IP: %, Versão: %, Identificação: %
+            // Using localized strings for each label to support all languages.
+            String formattedString = String.format(Locale.ROOT,
+                getContext().getString(R.string.online_list_item_format),
+                getContext().getString(R.string.online_list_nickname), nickname,
+                getContext().getString(R.string.online_list_status_msg), status,
+                getContext().getString(R.string.online_list_username), username,
+                getContext().getString(R.string.online_list_channel), channel,
+                getContext().getString(R.string.online_list_ip), ip,
+                getContext().getString(R.string.online_list_version), version,
+                getContext().getString(R.string.online_list_id), identifier
+            );
+
+            holder.nickname.setText(formattedString);
+
+            holder.user = user;
+
+            convertView.setContentDescription(formattedString);
+
+            ViewCompat.setAccessibilityDelegate(convertView, accessibilityAssistant);
         }
 
         return convertView;
+    }
+
+    static class ViewHolder {
+        TextView nickname;
+        User user;
     }
 }

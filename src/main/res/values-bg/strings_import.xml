@@ -1,0 +1,17 @@
+<resources>
+
+    <string name="title_import_server">Импорт на сървър</string>
+    <string name="msg_import_server_confirmation">Искате ли да импортирате сървъра: %1$s?</string>
+    <string name="action_import">Импорт</string>
+    <string name="action_import_connect">Импорт и свързване</string>
+    <string name="msg_server_imported">Сървърите са импортирани успешно</string>
+    <string name="err_file_read">Грешка при четене на файла</string>
+    <string name="title_select_server">Изберете сървър за отваряне</string>
+    <string name="title_export_servers">Експорт на сървъри</string>
+    <string name="msg_choose_export_method">Искате ли да експортирате всички сървъри или да изберете конкретни?</string>
+    <string name="action_export_all">Експорт на всички</string>
+    <string name="action_choose_servers">Избор</string>
+    <string name="msg_no_servers_selected">Няма избрани сървъри.</string>
+    <string name="msg_import_multiple_servers_confirmation">Искате ли да импортирате %1$d сървъра? </string>
+
+</resources>

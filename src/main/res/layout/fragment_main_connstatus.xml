@@ -3,39 +3,47 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp"
+    android:padding="@dimen/spacing_medium"
     android:gravity="center_horizontal">
 
     <TextView
         android:id="@+id/connectionstat_textview"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/stat_offline"
         android:textAppearance="?android:attr/textAppearanceMedium"
         android:textStyle="bold"
-        android:paddingBottom="16dp" />
+        android:paddingBottom="@dimen/spacing_medium"
+        android:focusable="true"
+        android:gravity="center_horizontal" />
 
     <TextView
         android:id="@+id/pingstat_textview"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/label_ping"
         android:textAppearance="?android:attr/textAppearanceMedium"
-        android:paddingBottom="16dp" />
+        android:paddingBottom="@dimen/spacing_medium"
+        android:focusable="true"
+        android:gravity="center_horizontal" />
 
     <TextView
         android:id="@+id/totalstat_textview"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/label_rxtx"
         android:textAppearance="?android:attr/textAppearanceMedium"
-        android:paddingBottom="16dp" />
+        android:paddingBottom="@dimen/spacing_medium"
+        android:focusable="true"
+        android:gravity="center_horizontal" />
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/title_section_connection"
         android:textStyle="italic"
-        android:paddingTop="32dp"/>
+        android:paddingTop="@dimen/spacing_large"
+        android:focusable="true"
+        android:gravity="center_horizontal" />
 
 </LinearLayout>

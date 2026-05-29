@@ -10,23 +10,8 @@
         <EditTextPreference
             android:enabled="false"
             android:singleLine="true"
-            android:title="@string/contrib_beqa" />
-        <EditTextPreference
-            android:enabled="false"
-            android:singleLine="true"
-            android:title="@string/contrib_bjorn" />
-        <EditTextPreference
-            android:enabled="false"
-            android:singleLine="true"
-            android:title="@string/contrib_amir" />
-        <EditTextPreference
-            android:enabled="false"
-            android:singleLine="true"
-            android:title="@string/contrib_corentin" />
-        <EditTextPreference
-            android:enabled="false"
-            android:singleLine="true"
-            android:title="@string/contrib_igor" />
+            android:title="@string/contrib_1" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/pref_title_translator">

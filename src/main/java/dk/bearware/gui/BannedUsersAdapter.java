@@ -56,7 +56,7 @@ public class BannedUsersAdapter extends BaseAdapter {
         }
 
         BannedUser user = bannedUsers.get(position);
-        holder.textName.setText(user.szNickname + " (" + user.szIPAddress + ")");
+        holder.textName.setText(String.format(context.getString(R.string.fmt_user_ip), user.szNickname, user.szIPAddress));
 
         holder.checkBox.setOnCheckedChangeListener(null);
         holder.checkBox.setChecked(selectedPositions.contains(position));

@@ -21,6 +21,15 @@
         android:layout_column="0"
         android:layout_gravity="center_vertical"
         android:text=""/>
+    <ImageButton
+        android:id="@+id/btn_copy_nickname"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_column="1"
+        android:layout_gravity="center_vertical"
+        android:src="@android:drawable/ic_menu_share"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/info_copy_name" />
 
     <TextView
         android:id="@+id/user_username"
@@ -29,9 +38,35 @@
         android:layout_column="0"
         android:layout_gravity="center_vertical"
         android:text=""/>
+    <ImageButton
+        android:id="@+id/btn_copy_username"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_column="1"
+        android:layout_gravity="center_vertical"
+        android:src="@android:drawable/ic_menu_share"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/action_copy_username" />
 
     <TextView
         android:id="@+id/user_userid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_column="0"
+        android:layout_gravity="center_vertical"
+        android:text=""/>
+    <ImageButton
+        android:id="@+id/btn_copy_userid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_column="1"
+        android:layout_gravity="center_vertical"
+        android:src="@android:drawable/ic_menu_share"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/info_copy_id" />
+
+    <TextView
+        android:id="@+id/user_type"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_column="0"
@@ -61,6 +96,15 @@
         android:layout_column="0"
         android:layout_gravity="center_vertical"
         android:text=""/>
+    <ImageButton
+        android:id="@+id/btn_copy_ipaddress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_column="1"
+        android:layout_gravity="center_vertical"
+        android:src="@android:drawable/ic_menu_share"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/info_copy_ip" />
 
     <TextView
         android:layout_width="wrap_content"
@@ -146,14 +190,26 @@
         android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_mute_media" />
 
-    <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/user_subscribetxtmsgSwitch"
+
+
+
+    <!-- Peer Subscriptions Section -->
+    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
-        android:text="@string/user_prop_title_subscribe_txtmsg" />
+        android:layout_marginTop="16dp"
+        android:text="@string/user_prop_title_peer_subscriptions"
+        style="@style/Base.TextAppearance.AppCompat.Headline" />
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/user_subscribeusrmsgSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_column="0"
+        android:layout_columnSpan="2"
+        android:text="@string/user_prop_title_subscribe_user_msg" />
 
     <androidx.appcompat.widget.SwitchCompat
         android:id="@+id/user_subscribechanmsgSwitch"
@@ -161,17 +217,15 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
-        android:text="@string/user_prop_title_subscribe_chanmsg" />
+        android:text="@string/user_prop_title_subscribe_chan_msg" />
 
     <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/user_subscribebcastmsgSwitch"
+        android:id="@+id/user_subscribebroadcastmsgSwitch"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
-        android:text="@string/user_prop_title_subscribe_bcastmsg" />
+        android:text="@string/user_prop_title_subscribe_broadcast_msg" />
 
     <androidx.appcompat.widget.SwitchCompat
         android:id="@+id/user_subscribevoiceSwitch"
@@ -179,7 +233,6 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_voice" />
 
     <androidx.appcompat.widget.SwitchCompat
@@ -188,7 +241,6 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_vid" />
 
     <androidx.appcompat.widget.SwitchCompat
@@ -197,7 +249,6 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_desk" />
 
     <androidx.appcompat.widget.SwitchCompat
@@ -206,8 +257,18 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_media" />
+
+    <!-- Local Subscriptions Section -->
+    <TextView
+        android:id="@+id/user_prop_header_local_subscriptions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_column="0"
+        android:layout_columnSpan="2"
+        android:layout_marginTop="16dp"
+        android:text="@string/user_prop_title_local_subscriptions"
+        style="@style/Base.TextAppearance.AppCompat.Headline" />
 
     <androidx.appcompat.widget.SwitchCompat
         android:id="@+id/user_subscribeintercepttxtmsgSwitch"
@@ -215,7 +276,6 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_intercept_txtmsg" />
 
     <androidx.appcompat.widget.SwitchCompat
@@ -224,7 +284,6 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_intercept_chanmsg" />
 
     <androidx.appcompat.widget.SwitchCompat
@@ -233,7 +292,6 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_intercept_voice" />
 
     <androidx.appcompat.widget.SwitchCompat
@@ -242,7 +300,6 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_intercept_vid" />
 
     <androidx.appcompat.widget.SwitchCompat
@@ -251,7 +308,6 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_intercept_desk" />
 
     <androidx.appcompat.widget.SwitchCompat
@@ -260,53 +316,11 @@
         android:layout_height="wrap_content"
         android:layout_column="0"
         android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
         android:text="@string/user_prop_title_subscribe_intercept_media" />
 
-    <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/user_transmitvoiceSwitch"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_column="0"
-        android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
-        android:text="@string/user_prop_title_transmit_voice" />
 
-    <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/user_transmitvidSwitch"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_column="0"
-        android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
-        android:text="@string/user_prop_title_transmit_vid" />
 
-    <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/user_transmitdeskSwitch"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_column="0"
-        android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
-        android:text="@string/user_prop_title_transmit_desk" />
 
-    <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/user_transmitmediaSwitch"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_column="0"
-        android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
-        android:text="@string/user_prop_title_transmit_media" />
-
-    <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/user_transmitchanmsgSwitch"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_column="0"
-        android:layout_columnSpan="2"
-        android:layout_gravity="center_vertical"
-        android:text="@string/user_prop_title_transmit_chanmsg" />
 
     <Space
         android:layout_height="match_parent"

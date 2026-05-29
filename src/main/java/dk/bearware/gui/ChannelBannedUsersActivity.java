@@ -45,11 +45,11 @@ public class ChannelBannedUsersActivity extends AppCompatActivity implements Tea
     
     private int channelId;
 
-    @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
-    }
 
+    @Override
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,7 +109,7 @@ public class ChannelBannedUsersActivity extends AppCompatActivity implements Tea
 
         new AlertDialog.Builder(this)
                 .setTitle(R.string.action_unban)
-                .setMessage(getString(R.string.confirm_unban_user, selectedPositions.size() + " users"))
+                .setMessage(getResources().getQuantityString(R.plurals.confirm_unban_user_plural, selectedPositions.size(), selectedPositions.size()))
                 .setPositiveButton(android.R.string.yes, (dialog, which) -> {
                      if (ttConnection.getService() != null) {
                          int unbannedCount = 0;
@@ -209,10 +209,10 @@ public class ChannelBannedUsersActivity extends AppCompatActivity implements Tea
             BannedUser u = bannedUsers.get(position);
             
             String banType = getBanTypeString(u.uBanTypes);
-            String owner = (u.szOwner != null && !u.szOwner.isEmpty()) ? u.szOwner : "SemNome";
+            String owner = (u.szOwner != null && !u.szOwner.isEmpty()) ? u.szOwner : getString(R.string.msg_no_owner);
             String details = getString(R.string.ban_info_fmt, u.szBanTime, banType, owner);
             
-            String displayName = (u.szNickname != null && !u.szNickname.isEmpty()) ? u.szNickname : "SemNome";
+            String displayName = (u.szNickname != null && !u.szNickname.isEmpty()) ? u.szNickname : getString(R.string.msg_no_owner);
             String title = displayName + " (" + u.szIPAddress + ")";
             if (u.szUsername != null && !u.szUsername.isEmpty()) {
                  title += " / " + u.szUsername;
@@ -230,7 +230,7 @@ public class ChannelBannedUsersActivity extends AppCompatActivity implements Tea
             if ((uBanTypes & BanType.BANTYPE_USERNAME) != 0) types.add(getString(R.string.ban_type_username));
             // if ((uBanTypes & BanType.BANTYPE_CHANNEL) != 0) types.add(getString(R.string.ban_type_channel)); // Usually implied
 
-            if (types.isEmpty()) return "Unknown";
+            if (types.isEmpty()) return getString(R.string.msg_ban_type_unknown);
             return android.text.TextUtils.join(", ", types);
         }
     }

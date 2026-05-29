@@ -9,6 +9,15 @@
     android:paddingTop="0dp"
     tools:context=".ServerListActivity" >
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/sort_by"
+        android:paddingLeft="8dp"
+        android:paddingRight="8dp"
+        android:paddingTop="8dp"
+        android:labelFor="@+id/sort_spinner" />
+
     <Spinner
         android:id="@+id/sort_spinner"
         android:layout_width="match_parent"
@@ -68,5 +77,5 @@
          android:layout_width="match_parent"
                android:layout_height="wrap_content"
                android:textAppearance="?android:attr/textAppearanceLarge" 
-               android:text="@string/text_translator"/>
+               android:text="@string/text_redesigned_by"/>
 </LinearLayout>

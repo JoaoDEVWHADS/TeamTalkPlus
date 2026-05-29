@@ -125,8 +125,21 @@ ClientEventListener.OnUserDesktopWindowListener {
     public View getChildView(int groupPosition, int childPosition,
             boolean isLastChild, View convertView, ViewGroup parent) {
     	int userid = (int) getGroupId(groupPosition);
+        User user = (User) getGroup(groupPosition);
         if (convertView == null)
             convertView = inflater.inflate(R.layout.item_media, parent, false);
+
+        TextView sourceText = convertView.findViewById(R.id.media_source_text);
+        if (sourceText != null && user != null) {
+            String name = Utils.getDisplayName(context, user);
+            String type = "";
+            switch(userid & ~USERID_MASK) {
+                case DESKTOP_SESSION: type = context.getString(R.string.text_desktop_session); break;
+                case WEBCAM_SESSION: type = context.getString(R.string.text_webcam_session); break;
+                case MEDIAFILE_SESSION: type = context.getString(R.string.text_mediafile_session); break;
+            }
+            sourceText.setText(String.format("%s (%s)", name, type));
+        }
 
         Bitmap bmp = media_sessions.get(userid);
         if (bmp != null) {
@@ -171,7 +184,13 @@ ClientEventListener.OnUserDesktopWindowListener {
         TextView wndinfo = convertView
                 .findViewById(R.id.mediainfo_textview);
         String name = Utils.getDisplayName(context, user);
-        nickname.setText(name);
+        String type = "";
+        switch(userid & ~USERID_MASK) {
+            case DESKTOP_SESSION : type = context.getString(R.string.text_desktop_session); break;
+            case WEBCAM_SESSION : type = context.getString(R.string.text_webcam_session); break;
+            case MEDIAFILE_SESSION : type = context.getString(R.string.text_mediafile_session); break;
+        }
+        nickname.setText(String.format("%s (%s)", name, type));
         ImageView img = convertView.findViewById(R.id.mediaicon);
         int img_resource;
         switch(userid & ~USERID_MASK) {
@@ -193,7 +212,7 @@ ClientEventListener.OnUserDesktopWindowListener {
 
         Bitmap bmp = media_sessions.get(userid);
         if (bmp != null) {
-            wndinfo.setText(String.format(Locale.ROOT, "%1$dx%2$d %3$d-bit", bmp.getWidth(),
+            wndinfo.setText(context.getString(R.string.video_format_info, bmp.getWidth(),
                     bmp.getHeight(),
                     (bmp.getConfig() == Bitmap.Config.ARGB_8888) ? 32 : 0));
         }

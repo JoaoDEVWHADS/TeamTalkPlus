@@ -24,6 +24,10 @@ public class MapAdapter extends BaseAdapter {
         this.text_id = text_id;
     }
 
+    public MapAdapter(Context context) {
+        this(context, android.R.layout.simple_spinner_item, android.R.id.text1);
+    }
+
     public void addPair(String key, int value) {
         keys.add(key);
         values.add(value);
@@ -67,10 +71,39 @@ public class MapAdapter extends BaseAdapter {
     @Override
     public View getView(int pos, View convertView, ViewGroup parent) {
         if(convertView == null)
-            convertView = inflater.inflate(layout_item, null);
+            convertView = inflater.inflate(layout_item, parent, false);
 
-        TextView text = convertView.findViewById(text_id);
-        text.setText(keys.get(pos));
+        TextView text;
+        if (convertView instanceof TextView) {
+            text = (TextView) convertView;
+        } else {
+            text = convertView.findViewById(text_id);
+        }
+        
+        if (text != null) {
+            text.setText(keys.get(pos));
+        }
+
+        return convertView;
+    }
+
+    @Override
+    public View getDropDownView(int position, View convertView, ViewGroup parent) {
+        if (convertView == null) {
+            // Use standard dropdown layout for accessibility (CheckedTextView)
+            convertView = inflater.inflate(android.R.layout.simple_spinner_dropdown_item, parent, false);
+        }
+
+        TextView text;
+        if (convertView instanceof TextView) {
+            text = (TextView) convertView;
+        } else {
+            text = convertView.findViewById(android.R.id.text1);
+        }
+
+        if (text != null) {
+            text.setText(keys.get(position));
+        }
 
         return convertView;
     }

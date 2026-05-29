@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:padding="@dimen/spacing_medium">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -14,46 +14,97 @@
             android:layout_height="wrap_content"
             android:text="@string/weblogin_prop_title_bearwareid" />
 
-        <EditText
-            android:id="@+id/edit_account_username"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textNoSuggestions"
-            android:hint="@string/weblogin_prop_title_bearwareid" />
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/edit_account_username"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="textNoSuggestions"
+                android:hint="@string/weblogin_prop_title_bearwareid" />
+
+            <ImageButton
+                android:id="@+id/btn_copy_username"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_share"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_copy_username" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="@dimen/spacing_small"
             android:text="@string/weblogin_prop_title_bearwarepasswd" />
 
-        <EditText
-            android:id="@+id/edit_account_password"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textPassword"
-            android:hint="@string/weblogin_prop_title_bearwarepasswd" />
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/edit_account_password"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="textPassword"
+                android:hint="@string/weblogin_prop_title_bearwarepasswd" />
+
+            <ImageButton
+                android:id="@+id/btn_toggle_password"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_view"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_show_password" />
+
+            <ImageButton
+                android:id="@+id/btn_copy_password"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_share"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_copy_password" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="@dimen/spacing_small"
             android:text="@string/init_channel"
             android:textColor="?android:attr/textColorPrimary"/>
 
-        <EditText
-            android:id="@+id/edit_account_init_chan"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/init_channel_select"
-            android:inputType="none"
-            android:focusable="false"
-            android:clickable="true" />
+            android:orientation="horizontal">
+            <EditText
+                android:id="@+id/edit_account_init_chan"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/init_channel_select"
+                android:inputType="none"
+                android:focusable="false"
+                android:clickable="true" />
+            <ImageButton
+                android:id="@+id/btn_clear_init_chan"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_clear" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/spacing_medium"
             android:text="@string/user_type"
             android:textColor="?android:attr/textColorPrimary"/>
 
@@ -84,23 +135,39 @@
             android:id="@+id/note_disabled_user"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="@dimen/spacing_small"
             android:text="@string/note_user_disabled"
             android:visibility="gone"
-            android:textColor="#FF0000" />
+            android:textColor="@color/error_red" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="@dimen/spacing_small"
             android:text="@string/pref_title_note" />
 
-        <EditText
-            android:id="@+id/edit_account_note"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textMultiLine"
-            android:hint="@string/pref_title_note" />
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/edit_account_note"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="textMultiLine"
+                android:hint="@string/pref_title_note" />
+
+            <ImageButton
+                android:id="@+id/btn_copy_note"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_share"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_copy_note"
+                android:visibility="gone" />
+        </LinearLayout>
 
     </LinearLayout>
 </ScrollView>

@@ -14,8 +14,13 @@ import dk.bearware.UserAccount;
 import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
 import dk.bearware.backend.TeamTalkService;
+import dk.bearware.UserRight;
+import dk.bearware.OpusConstants;
+import com.google.gson.Gson;
 import dk.bearware.events.ClientEventListener;
 import dk.bearware.events.CommandListener;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -23,14 +28,20 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.View.OnClickListener;
+import android.text.method.HideReturnsTransformationMethod;
+import android.text.method.PasswordTransformationMethod;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.CompoundButton;
 import android.widget.Toast;
+import android.text.TextWatcher;
+import android.text.Editable;
 
 public class ChannelPropActivity
 extends AppCompatActivity
@@ -56,19 +67,19 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
     }
 
     @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
-    }
-
-    @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
         if(resultCode == RESULT_OK) {
-            channel = Utils.getChannel(data);
             channel.audiocodec = Utils.getAudioCodec(data);
+            channel.audiocfg = Utils.getAudioConfig(data);
             exchangeChannel(false);
         }
+    }
+
+    @Override
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
     }
 
     @Override
@@ -78,7 +89,22 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
         setContentView(R.layout.activity_channel_prop);
         EdgeToEdgeHelper.enableEdgeToEdge(this);
 
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);        
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+
+        if (savedInstanceState != null) {
+            String json = savedInstanceState.getString("channel_json");
+            if (json != null) {
+                channel = new Gson().fromJson(json, Channel.class);
+            }
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (channel != null) {
+            outState.putString("channel_json", new Gson().toJson(channel));
+        }
     }
 
     @Override
@@ -96,37 +122,31 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch(item.getItemId()) {
-            case R.id.action_updatechannel : {
-                exchangeChannel(true);
-                if(channel.nChannelID > 0) {
-
-                    updateCmdId = getClient().doUpdateChannel(channel);
-                    if(updateCmdId < 0) {
-                        Toast.makeText(this, getResources().getString(R.string.text_con_cmderr),
-                                       Toast.LENGTH_LONG).show();
-                    }
+        if (item.getItemId() == R.id.action_updatechannel) {
+            exchangeChannel(true);
+            if(channel.nChannelID > 0) {
+                updateCmdId = getClient().doUpdateChannel(channel);
+                if(updateCmdId < 0) {
+                    Toast.makeText(this, getResources().getString(R.string.text_con_cmderr),
+                        Toast.LENGTH_LONG).show();
                 }
-                else {
-                    exchangeChannel(true);
-
+            }
+            else {
+                exchangeChannel(true);
+                CheckBox joinOnCreate = findViewById(R.id.chan_join_on_create);
+                if (joinOnCreate.isChecked()) {
                     updateCmdId = getClient().doJoinChannel(channel);
                     if(updateCmdId > 0)
                         getService().setJoinChannel(channel);
-                    else {
-                        Toast.makeText(this, getResources().getString(R.string.text_con_cmderr),
-                                       Toast.LENGTH_LONG).show();
-                    }
+                } else {
+                    updateCmdId = getClient().doMakeChannel(channel);
                 }
             }
-            break;
-            case android.R.id.home : {
-                setResult(RESULT_CANCELED);
-                finish();
-            }
-            break;
-            default :
-                return super.onOptionsItemSelected(item);
+        } else if (item.getItemId() == android.R.id.home) {
+            setResult(RESULT_CANCELED);
+            finish();
+        } else {
+            return super.onOptionsItemSelected(item);
         }
         return true;
     }
@@ -158,6 +178,24 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
         }
     }
 
+    private String getCodecSummary(dk.bearware.AudioCodec codec) {
+        switch (codec.nCodec) {
+            case dk.bearware.Codec.OPUS_CODEC: {
+                dk.bearware.OpusCodec opus = codec.opus;
+                String app = (opus.nApplication == dk.bearware.OpusConstants.OPUS_APPLICATION_VOIP) ? "VoIP" : getString(R.string.opus_app_music);
+                return getString(R.string.title_section_opus) + " (" + app + ", " + (opus.nSampleRate / 1000) + "kHz)";
+            }
+            case dk.bearware.Codec.SPEEX_CODEC:
+                return getString(R.string.title_section_speex);
+            case dk.bearware.Codec.SPEEX_VBR_CODEC:
+                return getString(R.string.title_section_speexvbr);
+            case dk.bearware.Codec.NO_CODEC:
+                return getString(R.string.title_section_noaudio);
+            default:
+                return "";
+        }
+    }
+
     void exchangeChannel(boolean store) {
 
         EditText chanName = findViewById(R.id.channame);
@@ -173,27 +211,15 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
         CheckBox chanNoVoiceAct = findViewById(R.id.chan_novoiceact);
         CheckBox chanNoAudioRec = findViewById(R.id.chan_noaudiorecord);
         CheckBox chanHidden = findViewById(R.id.chan_hidden);
-        
-        CheckBox chanFixedVolume = findViewById(R.id.chan_fixed_volume);
-        SeekBar chanGainLevel = findViewById(R.id.chan_gain_level);
-        TextView chanGainLevelValue = findViewById(R.id.chan_gain_level_value);
-        
-        chanFixedVolume.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            chanGainLevel.setEnabled(isChecked);
-            chanGainLevelValue.setEnabled(isChecked);
-        });
-        
-        chanGainLevel.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                 chanGainLevelValue.setText(String.valueOf(progress));
-            }
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
+        CheckBox chanJoinOnCreate = findViewById(R.id.chan_join_on_create);
 
+        UserAccount myaccount = new UserAccount();
+        boolean hasModifyRights = true;
+        if (getService() != null && getClient() != null) {
+            if (getClient().getMyUserAccount(myaccount)) {
+                hasModifyRights = (myaccount.uUserRights & UserRight.USERRIGHT_MODIFY_CHANNELS) != 0;
+            }
+        }
         if (store) {
             channel.szName = chanName.getText().toString();
             channel.szTopic = chanTopic.getText().toString();
@@ -239,9 +265,6 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
                 channel.uChannelType |= ChannelType.CHANNEL_HIDDEN;
             else
                 channel.uChannelType &= ~ChannelType.CHANNEL_HIDDEN;
-                
-            channel.audiocfg.bEnableAGC = chanFixedVolume.isChecked();
-            channel.audiocfg.nGainLevel = chanGainLevel.getProgress();
         }
         else {
             chanName.setFocusable(channel.nParentID > 0);
@@ -259,12 +282,41 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
             chanNoVoiceAct.setChecked((channel.uChannelType & ChannelType.CHANNEL_NO_VOICEACTIVATION) != 0);
             chanNoAudioRec.setChecked((channel.uChannelType & ChannelType.CHANNEL_NO_RECORDING) != 0);
             chanHidden.setChecked((channel.uChannelType & ChannelType.CHANNEL_HIDDEN) != 0);
+
+            if (!hasModifyRights) {
+                chanPermanent.setVisibility(View.GONE);
+                chanHidden.setVisibility(View.GONE);
+                chanJoinOnCreate.setVisibility(View.GONE);
+                chanJoinOnCreate.setChecked(true);
+            } else {
+                chanPermanent.setVisibility(View.VISIBLE);
+                chanHidden.setVisibility(View.VISIBLE);
+                chanJoinOnCreate.setVisibility(channel.nChannelID == 0 ? View.VISIBLE : View.GONE);
+            }
+
+            setupPasswordToggle(chanPasswd, (ImageButton) findViewById(R.id.btn_toggle_chanpasswd));
+            setupPasswordCopy(chanPasswd, (ImageButton) findViewById(R.id.btn_copy_chanpasswd), R.string.msg_password_copied);
+            setupPasswordToggle(chanOpPasswd, (ImageButton) findViewById(R.id.btn_toggle_chanoppasswd));
+            setupPasswordCopy(chanOpPasswd, (ImageButton) findViewById(R.id.btn_copy_chanoppasswd), R.string.msg_password_copied);
             
-            chanFixedVolume.setChecked(channel.audiocfg.bEnableAGC);
-            chanGainLevel.setProgress(channel.audiocfg.nGainLevel);
-            chanGainLevelValue.setText(String.valueOf(channel.audiocfg.nGainLevel));
-            chanGainLevel.setEnabled(channel.audiocfg.bEnableAGC);
-            chanGainLevelValue.setEnabled(channel.audiocfg.bEnableAGC);
+            setupPasswordCopy(chanName, (ImageButton) findViewById(R.id.btn_copy_channame), R.string.msg_channelname_copied);
+            setupPasswordCopy(chanTopic, (ImageButton) findViewById(R.id.btn_copy_chantopic), R.string.msg_note_copied);
+            
+            SeekBar maxUsersSeekBar = findViewById(R.id.chanmaxusers_seekBar);
+            SeekBar diskQuotaSeekBar = findViewById(R.id.chandiskquota_seekBar);
+            
+            int maxServerUsers = 1000;
+            ServerProperties prop = new ServerProperties();
+            if (getService().getTTInstance().getServerProperties(prop)) {
+                maxServerUsers = prop.nMaxUsers;
+            }
+            setupSeekBarSync(maxUsersSeekBar, chanMaxUsers, maxServerUsers);
+            setupSeekBarSync(diskQuotaSeekBar, chanDiskQuota, 1048576); // 1GB quota slider limit
+        }
+
+        TextView codecSummary = findViewById(R.id.setup_audcodec_summary);
+        if (codecSummary != null && channel != null && channel.audiocodec != null) {
+            codecSummary.setText(getCodecSummary(channel.audiocodec));
         }
     }
 
@@ -286,9 +338,19 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
                 }
             }
             else if(parentid > 0) {
-
                 channel = new Channel(true, true);
                 channel.nParentID = parentid;
+                
+                // Fix for Fixed Volume (AGC) being checked by default
+                channel.audiocfg.bEnableAGC = false;
+                
+                // Fix for "Ignore silence" (DTX) being checked by default
+                channel.audiocodec.opus.bDTX = false;
+                channel.audiocodec.speex_vbr.bDTX = false;
+                
+                // Default Join on Create to false for new channels. 
+                // exchangeChannel will override this to true for limited users.
+                ((CheckBox)findViewById(R.id.chan_join_on_create)).setChecked(false);
                 ServerProperties prop = new ServerProperties();
                 if (service.getTTInstance().getServerProperties(prop)) {
                     channel.nMaxUsers = prop.nMaxUsers;
@@ -304,6 +366,7 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
             if (v.getId() == R.id.setup_audcodec_btn) {
                 Intent edit = new Intent(ChannelPropActivity.this, AudioCodecActivity.class);
                 edit = Utils.putAudioCodec(edit, channel.audiocodec);
+                edit = Utils.putAudioConfig(edit, channel.audiocfg);
                 exchangeChannel(true);
                 edit = Utils.putChannel(edit, channel);
                 startActivityForResult(edit, REQUEST_AUDIOCODEC);
@@ -320,10 +383,36 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
 
     int updateCmdId = 0;
 
+    private void setupPasswordToggle(EditText field, ImageButton btn) {
+        if (btn == null || field == null) return;
+        btn.setTag(false);
+        btn.setOnClickListener(v -> {
+            boolean visible = (Boolean) btn.getTag();
+            if (visible) {
+                field.setTransformationMethod(PasswordTransformationMethod.getInstance());
+            } else {
+                field.setTransformationMethod(HideReturnsTransformationMethod.getInstance());
+            }
+            btn.setTag(!visible);
+            field.setSelection(field.getText().length());
+        });
+    }
+
+    private void setupPasswordCopy(EditText field, ImageButton btn, int msgResId) {
+        if (btn == null || field == null) return;
+        btn.setOnClickListener(v -> {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipData clip = ClipData.newPlainText(getString(R.string.label_copied_text), field.getText().toString());
+            clipboard.setPrimaryClip(clip);
+            Toast.makeText(this, msgResId, Toast.LENGTH_SHORT).show();
+        });
+    }
+
     @Override
     public void onCmdError(int cmdId, ClientErrorMsg errmsg) {
         if (updateCmdId == cmdId) {
             updateCmdId = 0;
+            Toast.makeText(this, errmsg.szErrorMsg, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -331,5 +420,36 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
     public void onCmdSuccess(int cmdId) {
         setResult(RESULT_OK);
         finish();
+    }
+
+    private void setupSeekBarSync(final SeekBar seekBar, final EditText editText, final int max) {
+        if (seekBar == null || editText == null) return;
+        seekBar.setMax(max);
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    editText.setText(String.valueOf(progress));
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        editText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void afterTextChanged(Editable s) {
+                try {
+                    String str = s.toString();
+                    if (str.isEmpty()) return;
+                    int val = Integer.parseInt(str);
+                    if (val >= 0 && val <= max) {
+                        seekBar.setProgress(val);
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+        });
     }
 }

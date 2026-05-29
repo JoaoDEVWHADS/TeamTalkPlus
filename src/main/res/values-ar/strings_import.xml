@@ -1,0 +1,17 @@
+<resources>
+
+    <string name="title_import_server">استيراد خادم</string>
+    <string name="msg_import_server_confirmation">هل تريد استيراد الخادم: %1$s؟</string>
+    <string name="action_import">استيراد</string>
+    <string name="action_import_connect">استيراد واتصال</string>
+    <string name="msg_server_imported">تم استيراد الخوادم بنجاح</string>
+    <string name="err_file_read">خطأ في قراءة الملف</string>
+    <string name="title_select_server">اختر خادماً لفتحه</string>
+    <string name="title_export_servers">تصدير الخوادم</string>
+    <string name="msg_choose_export_method">هل تريد تصدير جميع الخوادم أم اختيار خوادم معينة؟</string>
+    <string name="action_export_all">تصدير الكل</string>
+    <string name="action_choose_servers">اختر</string>
+    <string name="msg_no_servers_selected">لم يتم اختيار أي خادم.</string>
+    <string name="msg_import_multiple_servers_confirmation">هل تريد استيراد %1$d خوادم؟</string>
+
+</resources>

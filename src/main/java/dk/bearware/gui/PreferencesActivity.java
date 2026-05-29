@@ -1,6 +1,7 @@
 
 package dk.bearware.gui;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -17,6 +18,7 @@ import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceCategory;
 import android.preference.PreferenceFragment;
+import android.preference.PreferenceGroup;
 import android.preference.PreferenceManager;
 import android.preference.RingtonePreference;
 import android.speech.tts.TextToSpeech.EngineInfo;
@@ -31,8 +33,12 @@ import androidx.annotation.LayoutRes;
 import androidx.appcompat.app.AppCompatDelegate;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.io.File;
+import java.io.IOException;
 
 import dk.bearware.ClientEvent;
 import dk.bearware.StreamType;
@@ -64,8 +70,8 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
     }
 
     @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
     }
 
     @Override
@@ -219,7 +225,7 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
             getClient().doChangeStatus(statusmode, statusmsg);
         }
 
-        int mf_volume = prefs.getInt(Preferences.PREF_SOUNDSYSTEM_MEDIAFILE_VOLUME, 50);
+        int mf_volume = prefs.getInt(Preferences.PREF_SOUNDSYSTEM_MEDIAFILE_VOLUME, 20);
         mf_volume = Utils.refVolume(mf_volume);
         for(User u: getService().getUsers().values()) {
             getClient().setUserVolume(u.nUserID, StreamType.STREAMTYPE_MEDIAFILE_AUDIO, mf_volume);
@@ -363,24 +369,35 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
                 bindPreferenceSummaryToValue(findPreference("pref_channel_sort"));
 
                 Preference languagePref = findPreference(Preferences.PREF_LANGUAGE);
-                if (languagePref != null) {
-                    bindPreferenceSummaryToValue(languagePref);
-                    languagePref.setOnPreferenceChangeListener((preference, newValue) -> {
+                if (languagePref instanceof ListPreference listLanguagePref) {
+                    // Set correct initial summary from the current entry label
+                    String currentLangValue = PreferenceManager
+                            .getDefaultSharedPreferences(getActivity())
+                            .getString(Preferences.PREF_LANGUAGE, "default");
+                    int langIdx = listLanguagePref.findIndexOfValue(currentLangValue);
+                    CharSequence[] langEntries = listLanguagePref.getEntries();
+                    if (langIdx >= 0 && langEntries != null && langIdx < langEntries.length) {
+                        listLanguagePref.setSummary(langEntries[langIdx]);
+                    } else {
+                        listLanguagePref.setSummary(langEntries != null && langEntries.length > 0
+                                ? langEntries[0] : null); // fallback to "System Default"
+                    }
+
+                    listLanguagePref.setOnPreferenceChangeListener((preference, newValue) -> {
                         String language = (String) newValue;
-                        LocaleHelper.setLocale(getActivity(), language);
-                        
-                        // Restart app to apply changes
-                        Intent intent = getActivity().getPackageManager()
-                            .getLaunchIntentForPackage(getActivity().getPackageName());
-                        if(intent != null) {
-                            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                            startActivity(intent);
-                            getActivity().finish();
-                        } else {
-                            getActivity().recreate();
+                        Activity activity = getActivity();
+                        if (activity != null) {
+                            LocaleHelper.setLocale(activity, language);
+                            // Delay recreate slightly to allow preference update to finish
+                            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                if (!activity.isFinishing()) {
+                                    activity.recreate();
+                                }
+                            });
                         }
                         return true;
                     });
+
                 }
             } catch (Exception e) {
                  Log.e(TAG, "Failed to load Display preferences", e);
@@ -442,11 +459,44 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
         }
     }
 
-    public static class SoundEventsPreferenceFragment extends PreferenceFragment {
+    public static class SoundEventsPreferenceFragment extends PreferenceFragment implements SharedPreferences.OnSharedPreferenceChangeListener {
+
+        @Override
+        public void onResume() {
+            super.onResume();
+            getPreferenceManager().getSharedPreferences().registerOnSharedPreferenceChangeListener(this);
+        }
+
+        @Override
+        public void onPause() {
+            super.onPause();
+            getPreferenceManager().getSharedPreferences().unregisterOnSharedPreferenceChangeListener(this);
+        }
+
+        @Override
+        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+            Preference masterToggle = findPreference("pref_master_sound_toggle");
+            if (masterToggle != null) {
+                updateMasterToggleText(masterToggle, getPreferenceScreen());
+            }
+        }
+
         @Override
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
+            setHasOptionsMenu(true);
             addPreferencesFromResource(R.xml.pref_soundevents);
+
+            Preference masterToggle = findPreference("pref_master_sound_toggle");
+            if (masterToggle != null) {
+                updateMasterToggleText(masterToggle, getPreferenceScreen());
+                masterToggle.setOnPreferenceClickListener(preference -> {
+                    boolean allChecked = isAllChecked(getPreferenceScreen());
+                    toggleAll(getPreferenceScreen(), !allChecked);
+                    updateMasterToggleText(masterToggle, getPreferenceScreen());
+                    return true;
+                });
+            }
 
             ListPreference soundPackPref = (ListPreference) findPreference("pref_sound_pack");
             if (soundPackPref != null) {
@@ -462,28 +512,57 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
             }
         }
 
-        private void populateSoundPacks(ListPreference lp) {
-            List<String> entries = new ArrayList<>();
-            List<String> entryValues = new ArrayList<>();
+        @Override
+        public void onCreateOptionsMenu(android.view.Menu menu, android.view.MenuInflater inflater) {
+            menu.add(0, 1, 0, R.string.action_select_all);
+            menu.add(0, 2, 0, R.string.action_deselect_all);
+            super.onCreateOptionsMenu(menu, inflater);
+        }
 
-            // Default option
-            entries.add(getString(R.string.sound_pack_default));
-            entryValues.add("Default");
+        @Override
+        public boolean onOptionsItemSelected(android.view.MenuItem item) {
+            switch (item.getItemId()) {
+                case 1:
+                    toggleAll(getPreferenceScreen(), true);
+                    updateMasterToggleText(findPreference("pref_master_sound_toggle"), getPreferenceScreen());
+                    return true;
+                case 2:
+                    toggleAll(getPreferenceScreen(), false);
+                    updateMasterToggleText(findPreference("pref_master_sound_toggle"), getPreferenceScreen());
+                    return true;
+            }
+            return super.onOptionsItemSelected(item);
+        }
+
+        private void populateSoundPacks(ListPreference lp) {
+            Set<String> entrySet = new LinkedHashSet<>();
+
+            // Scan internal assets/sounds
+            try {
+                String[] assetsList = getActivity().getAssets().list("sounds");
+                if (assetsList != null) {
+                    for (String asset : assetsList) {
+                        entrySet.add(asset);
+                    }
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "Failed to list assets/sounds", e);
+            }
 
             // Scan /sdcard/TeamTalk/Sounds
-            File soundsDir = new File(Environment.getExternalStorageDirectory(), "TeamTalk/Sounds");
+            File soundsDir = new File(Environment.getExternalStorageDirectory(), dk.bearware.data.AppInfo.FOLDER_NAME + "/Sounds");
             if (soundsDir.exists() && soundsDir.isDirectory()) {
                 File[] dirs = soundsDir.listFiles(File::isDirectory);
                 if (dirs != null) {
                     for (File dir : dirs) {
-                        entries.add(dir.getName());
-                        entryValues.add(dir.getName());
+                        entrySet.add(dir.getName());
                     }
                 }
             }
 
+            List<String> entries = new ArrayList<>(entrySet);
             lp.setEntries(entries.toArray(new String[0]));
-            lp.setEntryValues(entryValues.toArray(new String[0]));
+            lp.setEntryValues(entries.toArray(new String[0]));
         }
     }
 
@@ -495,11 +574,44 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
         }
     }
 
-    public static class TtsPreferenceFragment extends PreferenceFragment {
+    public static class TtsPreferenceFragment extends PreferenceFragment implements SharedPreferences.OnSharedPreferenceChangeListener {
+
+        @Override
+        public void onResume() {
+            super.onResume();
+            getPreferenceManager().getSharedPreferences().registerOnSharedPreferenceChangeListener(this);
+        }
+
+        @Override
+        public void onPause() {
+            super.onPause();
+            getPreferenceManager().getSharedPreferences().unregisterOnSharedPreferenceChangeListener(this);
+        }
+
+        @Override
+        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+            Preference masterToggle = findPreference("pref_master_tts_toggle");
+            if (masterToggle != null) {
+                updateMasterToggleText(masterToggle, getPreferenceScreen());
+            }
+        }
+
         @Override
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
+            setHasOptionsMenu(true);
             addPreferencesFromResource(R.xml.pref_tts);
+
+            Preference masterToggle = findPreference("pref_master_tts_toggle");
+            if (masterToggle != null) {
+                updateMasterToggleText(masterToggle, getPreferenceScreen());
+                masterToggle.setOnPreferenceClickListener(preference -> {
+                    boolean allChecked = isAllChecked(getPreferenceScreen());
+                    toggleAll(getPreferenceScreen(), !allChecked);
+                    updateMasterToggleText(masterToggle, getPreferenceScreen());
+                    return true;
+                });
+            }
 
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity().getBaseContext());
             TTSWrapper tts = new TTSWrapper(getActivity().getBaseContext(), prefs.getString("pref_speech_engine", TTSWrapper.defaultEngineName));
@@ -513,6 +625,8 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
             }
             enginePrefs.setEntries(entries.toArray(new CharSequence[engines.size()]));
             enginePrefs.setEntryValues(values.toArray(new CharSequence[engines.size()]));
+            
+            bindPreferenceSummaryToValue(findPreference(Preferences.PREF_TTS_LANGUAGE_BEHAVIOR));
 
             if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.O) {
                 CheckBoxPreference mTtsPref = (CheckBoxPreference) findPreference("pref_a11y_volume");
@@ -521,6 +635,28 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
                     mTtsCat.removePreference(mTtsPref);
                 }
             }
+        }
+
+        @Override
+        public void onCreateOptionsMenu(android.view.Menu menu, android.view.MenuInflater inflater) {
+            menu.add(0, 1, 0, R.string.action_select_all);
+            menu.add(0, 2, 0, R.string.action_deselect_all);
+            super.onCreateOptionsMenu(menu, inflater);
+        }
+
+        @Override
+        public boolean onOptionsItemSelected(android.view.MenuItem item) {
+            switch (item.getItemId()) {
+                case 1:
+                    toggleAll(getPreferenceScreen(), true);
+                    updateMasterToggleText(findPreference("pref_master_tts_toggle"), getPreferenceScreen());
+                    return true;
+                case 2:
+                    toggleAll(getPreferenceScreen(), false);
+                    updateMasterToggleText(findPreference("pref_master_tts_toggle"), getPreferenceScreen());
+                    return true;
+            }
+            return super.onOptionsItemSelected(item);
         }
     }
 
@@ -568,6 +704,15 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
     }
 
     @Override
+    public void onBackPressed() {
+        if (getFragmentManager().getBackStackEntryCount() > 0) {
+            getFragmentManager().popBackStack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
     public void onServiceConnected(TeamTalkService service) {
     }
 
@@ -582,4 +727,33 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
         return appCompatDelegate;
     }
 
+    private static boolean isAllChecked(PreferenceGroup group) {
+        for (int i = 0; i < group.getPreferenceCount(); i++) {
+            Preference p = group.getPreference(i);
+            if (p instanceof CheckBoxPreference) {
+                if (!((CheckBoxPreference) p).isChecked())
+                    return false;
+            } else if (p instanceof PreferenceGroup) {
+                if (!isAllChecked((PreferenceGroup) p))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    private static void toggleAll(PreferenceGroup group, boolean check) {
+        for (int i = 0; i < group.getPreferenceCount(); i++) {
+            Preference p = group.getPreference(i);
+            if (p instanceof CheckBoxPreference) {
+                ((CheckBoxPreference) p).setChecked(check);
+            } else if (p instanceof PreferenceGroup) {
+                toggleAll((PreferenceGroup) p, check);
+            }
+        }
+    }
+
+    private static void updateMasterToggleText(Preference masterToggle, PreferenceGroup root) {
+        boolean allChecked = isAllChecked(root);
+        masterToggle.setTitle(allChecked ? R.string.action_deselect_all : R.string.action_select_all);
+    }
 }

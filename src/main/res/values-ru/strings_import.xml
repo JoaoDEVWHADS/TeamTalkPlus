@@ -1,0 +1,17 @@
+<resources>
+
+    <string name="title_import_server">Импорт сервера</string>
+    <string name="msg_import_server_confirmation">Вы хотите импортировать сервер: %1$s?</string>
+    <string name="action_import">Импорт</string>
+    <string name="action_import_connect">Импортировать и подключиться</string>
+    <string name="msg_server_imported">Серверы успешно импортированы</string>
+    <string name="err_file_read">Ошибка чтения файла</string>
+    <string name="title_select_server">Выберите сервер для открытия</string>
+    <string name="title_export_servers">Экспорт серверов</string>
+    <string name="msg_choose_export_method">Вы хотите экспортировать все серверы или выбрать определенные?</string>
+    <string name="action_export_all">Экспортировать все</string>
+    <string name="action_choose_servers">Выбрать</string>
+    <string name="msg_no_servers_selected">Серверы не выбраны.</string>
+    <string name="msg_import_multiple_servers_confirmation">Вы хотите импортировать %1$d серверов?</string>
+
+</resources>

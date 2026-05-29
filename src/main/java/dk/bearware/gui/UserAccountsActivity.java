@@ -1,6 +1,8 @@
 package dk.bearware.gui;
 
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -18,6 +20,9 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.AccessibilityDelegateCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,6 +38,8 @@ import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
 import dk.bearware.backend.TeamTalkService;
 import dk.bearware.events.ClientEventListener;
+import dk.bearware.UserType;
+import dk.bearware.data.ServerEntry;
 
 public class UserAccountsActivity extends AppCompatActivity implements 
         TeamTalkConnectionListener, 
@@ -49,11 +56,11 @@ public class UserAccountsActivity extends AppCompatActivity implements
     private Spinner sortSpinner;
     private boolean isAscending = true;
 
-    @Override
-    protected void attachBaseContext(Context base) {
-        super.attachBaseContext(LocaleHelper.onAttach(base));
-    }
 
+    @Override
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(dk.bearware.gui.LocaleHelper.onAttach(base));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -117,6 +124,17 @@ public class UserAccountsActivity extends AppCompatActivity implements
         Intent intent = new Intent(this, TeamTalkService.class);
         if(!bindService(intent, mConnection, Context.BIND_AUTO_CREATE)) {
             Log.e(TAG, "Failed to connect to TeamTalk service");
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mConnection.isBound()) {
+            if (getService() != null && getService().getTTInstance() != null) {
+                allAccounts.clear();
+                getClient().doListUserAccounts(0, 100);
+            }
         }
     }
 
@@ -193,26 +211,71 @@ public class UserAccountsActivity extends AppCompatActivity implements
     }
 
     private void showAccountOptions(UserAccount account) {
-        String[] options = {getString(R.string.action_edit), getString(R.string.action_delete)};
+        String[] options = {
+            getString(R.string.action_account_properties),
+            getString(R.string.action_edit),
+            getString(R.string.action_delete),
+            getString(R.string.action_export_tt)
+        };
         new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.title_options_for, account.szUsername))
                 .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
-
-                        Intent intent = new Intent(this, UserAccountEditActivity.class);
-                        intent.putExtra(UserAccountEditActivity.EXTRA_IS_EDIT, true);
-                        intent.putExtra(UserAccountEditActivity.EXTRA_USERNAME, account.szUsername);
-                        intent.putExtra(UserAccountEditActivity.EXTRA_PASSWORD, account.szPassword);
-                        intent.putExtra(UserAccountEditActivity.EXTRA_USERTYPE, account.uUserType);
-                        intent.putExtra(UserAccountEditActivity.EXTRA_USERRIGHTS, account.uUserRights);
-                        intent.putExtra(UserAccountEditActivity.EXTRA_NOTE, account.szNote);
-                        startActivity(intent);
-                    } else if (which == 1) {
-
-                        confirmDelete(account);
-                    }
+                    handleAccountOption(account, which);
                 })
                 .show();
+    }
+
+    public void handleAccountOption(UserAccount account, int which) {
+        if (which == 0) {
+            Intent intent = new Intent(this, UserAccountEditActivity.class);
+            intent.putExtra(UserAccountEditActivity.EXTRA_IS_VIEW, true);
+            intent.putExtra(UserAccountEditActivity.EXTRA_USERNAME, account.szUsername);
+            intent.putExtra(UserAccountEditActivity.EXTRA_PASSWORD, account.szPassword);
+            intent.putExtra(UserAccountEditActivity.EXTRA_USERTYPE, account.uUserType);
+            intent.putExtra(UserAccountEditActivity.EXTRA_USERRIGHTS, account.uUserRights);
+            intent.putExtra(UserAccountEditActivity.EXTRA_NOTE, account.szNote);
+            intent.putExtra(UserAccountEditActivity.EXTRA_INIT_CHANNEL, account.szInitChannel);
+            intent.putExtra(UserAccountEditActivity.EXTRA_OPERATOR_CHANNELS, account.autoOperatorChannels);
+            startActivity(intent);
+        } else if (which == 1) {
+            Intent intent = new Intent(this, UserAccountEditActivity.class);
+            intent.putExtra(UserAccountEditActivity.EXTRA_IS_EDIT, true);
+            intent.putExtra(UserAccountEditActivity.EXTRA_USERNAME, account.szUsername);
+            intent.putExtra(UserAccountEditActivity.EXTRA_PASSWORD, account.szPassword);
+            intent.putExtra(UserAccountEditActivity.EXTRA_USERTYPE, account.uUserType);
+            intent.putExtra(UserAccountEditActivity.EXTRA_USERRIGHTS, account.uUserRights);
+            intent.putExtra(UserAccountEditActivity.EXTRA_NOTE, account.szNote);
+            intent.putExtra(UserAccountEditActivity.EXTRA_INIT_CHANNEL, account.szInitChannel);
+            intent.putExtra(UserAccountEditActivity.EXTRA_OPERATOR_CHANNELS, account.autoOperatorChannels);
+            startActivity(intent);
+        } else if (which == 2) {
+            confirmDelete(account);
+        } else if (which == 3) {
+            exportAccount(account);
+        }
+    }
+
+    private void exportAccount(UserAccount account) {
+        ServerEntry server = getService().getServerEntry();
+        if (server != null) {
+            ServerEntry exportEntry = new ServerEntry();
+            exportEntry.ipaddr = server.ipaddr;
+            exportEntry.tcpport = server.tcpport;
+            exportEntry.udpport = server.udpport;
+            exportEntry.encrypted = server.encrypted;
+            exportEntry.username = account.szUsername;
+            exportEntry.password = account.szPassword;
+            exportEntry.servername = server.servername;
+            exportEntry.channel = "/";
+
+            String xml = Utils.generateServerEntryXml(exportEntry);
+            String filename = account.szUsername + ".tt";
+            if (Utils.saveTTFileToDownloads(this, xml, filename)) {
+                Toast.makeText(this, getString(R.string.msg_file_saved_to_downloads, filename), Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, R.string.err_save_tt_file_failed, Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void confirmDelete(UserAccount account) {
@@ -255,7 +318,29 @@ public class UserAccountsActivity extends AppCompatActivity implements
                     displayName = getContext().getString(R.string.anonymous_account);
                 }
                 text1.setText(displayName);
-                text2.setText(account.szNote.isEmpty() ? getContext().getString(R.string.no_note) : account.szNote);
+
+                StringBuilder details = new StringBuilder();
+                
+                // User Type
+                if ((account.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN) {
+                    details.append(getContext().getString(R.string.user_type_admin));
+                } else {
+                    details.append(getContext().getString(R.string.user_type_default));
+                }
+
+                // Last Modified
+                if (account.szLastModified != null && !account.szLastModified.isEmpty()) {
+                    details.append(" | ").append(getContext().getString(R.string.last_modified, account.szLastModified));
+                }
+
+                // Note
+                if (account.szNote != null && !account.szNote.isEmpty()) {
+                    details.append("\n").append(account.szNote);
+                } else {
+                     details.append("\n").append(getContext().getString(R.string.no_note));
+                }
+
+                text2.setText(details.toString());
             }
             return convertView;
         }

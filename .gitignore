@@ -7,7 +7,6 @@ local.properties
 *.iml
 *.jks
 *.keystore
-*.so
 *.log
 *.py
 missing_symbols.txt

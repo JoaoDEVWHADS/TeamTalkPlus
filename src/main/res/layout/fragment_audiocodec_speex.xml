@@ -1,79 +1,202 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical" >
+    android:layout_height="match_parent">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center" >
+        android:padding="16dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/text_samplerate"
+                android:textAppearance="?android:attr/textAppearanceMedium"
+                android:labelFor="@+id/speex_bandmodeSpin" />
+
+            <Spinner
+                android:id="@+id/speex_bandmodeSpin"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_weight="1" />
+
+        </LinearLayout>
 
         <TextView
-            android:layout_width="wrap_content"
+            android:id="@+id/speex_quality_label"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/text_samplerate"
-            android:textAppearance="?android:attr/textAppearanceMedium" />
-
-        <Spinner
-            android:id="@+id/speex_bandmodeSpin"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="20dp"
-            android:layout_weight="1" />
-
-    </LinearLayout>
-
-	<LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:layout_marginTop="10dp"
-        android:orientation="horizontal" >
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:text="@string/text_quality"
-            android:textAppearance="?android:attr/textAppearanceMedium" />
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:labelFor="@+id/speex_quality_mode_spin" />
 
-        <SeekBar
-            android:id="@+id/speex_qualitySeekBar"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="20dp"
-            android:contentDescription="@string/speexquality"
-            android:layout_weight="1" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-    </LinearLayout>
+            <Spinner
+                android:id="@+id/speex_quality_mode_spin"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:gravity="center">
+            <SeekBar
+                android:id="@+id/speex_qualitySeekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/speexquality"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1" />
+
+            <EditText
+                android:id="@+id/speex_quality_edit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:imeOptions="actionDone"
+                android:singleLine="true"
+                android:selectAllOnFocus="true"
+                android:visibility="gone"
+                android:hint="@string/placeholder_zero"
+                android:contentDescription="@string/text_quality"
+                android:importantForAutofill="no" />
+
+            <TextView
+                android:id="@+id/speex_quality_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/placeholder_zero"
+                android:ems="4"
+                android:gravity="right"
+                android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        </LinearLayout>
 
         <TextView
-            android:layout_width="wrap_content"
+            android:id="@+id/speex_txinterval_label"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:text="@string/text_txinterval"
-            android:textAppearance="?android:attr/textAppearanceMedium" />
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:labelFor="@+id/speex_txinterval_mode_spin" />
 
-        <SeekBar
-            android:id="@+id/speex_txintervalSeekBar"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="20dp"
-            android:contentDescription="@string/speexinterval"
-            android:layout_weight="1" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/speex_txintervalTextView"
+            <Spinner
+                android:id="@+id/speex_txinterval_mode_spin"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <SeekBar
+                android:id="@+id/speex_txintervalSeekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/speexinterval"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1" />
+
+
+            <EditText
+                android:id="@+id/speex_txinterval_edit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:imeOptions="actionDone"
+                android:singleLine="true"
+                android:selectAllOnFocus="true"
+                android:visibility="gone"
+                android:hint="@string/unit_ms"
+                android:contentDescription="@string/text_txinterval"
+                android:importantForAutofill="no" />
+
+            <TextView
+                android:id="@+id/speex_txintervalTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="20 ms"
+                android:ems="4"
+                android:gravity="right"
+                android:textAppearance="?android:attr/textAppearanceMedium" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="10dp"
+            android:background="?android:attr/listDivider" />
+
+        <CheckBox
+            android:id="@+id/chan_fixed_volume"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            tools:text="Medium Text"
-            android:textAppearance="?android:attr/textAppearanceMedium" />
-    </LinearLayout>
+            android:text="@string/channel_prop_title_fixed_volume" />
 
-</LinearLayout>
+        <LinearLayout
+            android:id="@+id/chan_gain_level_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal" >
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_prop_title_gain_level"
+                android:textAppearance="?android:attr/textAppearanceMedium"
+                android:labelFor="@+id/chan_gain_level" />
+
+            <SeekBar
+                android:id="@+id/chan_gain_level"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="32000" />
+
+            <EditText
+                android:id="@+id/chan_gain_level_edit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:imeOptions="actionDone"
+                android:singleLine="true"
+                android:selectAllOnFocus="true"
+                android:visibility="gone"
+                android:hint="@string/placeholder_zero"
+                android:contentDescription="@string/channel_prop_title_gain_level"
+                android:importantForAutofill="no" />
+
+            <TextView
+                android:id="@+id/chan_gain_level_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/placeholder_zero"
+                android:ems="3"
+                android:gravity="right"
+                android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

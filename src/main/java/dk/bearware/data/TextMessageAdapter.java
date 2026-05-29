@@ -12,6 +12,7 @@ import dk.bearware.gui.R;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Color;
+import androidx.core.view.ViewCompat;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -248,7 +249,8 @@ public class TextMessageAdapter extends BaseAdapter {
         }
 
         convertView.setBackgroundColor(bg_color);
-        convertView.setAccessibilityDelegate(accessibilityAssistant);
+        convertView.setTag(txtmsg);
+        ViewCompat.setAccessibilityDelegate(convertView, accessibilityAssistant);
 
         android.content.SharedPreferences prefs = android.preference.PreferenceManager.getDefaultSharedPreferences(parent.getContext());
         float scale = 1.0f;

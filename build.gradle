@@ -4,15 +4,19 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.13.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.0-Beta1"
     }
 }
-apply plugin: 'com.android.application'
+
+plugins {
+    id 'com.android.application' version '9.1.0'
+}
+
 android {
     namespace = 'dk.bearware.gui'
-    compileSdk 34  
-    buildToolsVersion '34.0.0'
-    ndkVersion '26.3.11579264'  
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+    ndkVersion '29.0.14206865'
     buildFeatures {
         buildConfig = true
         viewBinding = true
@@ -23,10 +27,11 @@ android {
     defaultConfig {
         applicationId = 'com.teamtalk.plus'
         minSdk 21
-        targetSdk 34
-        versionCode 200
-        versionName '5.22'
+        targetSdk 35
+        versionCode 53404
+        versionName '5.34.4'
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
+        buildConfigField "String", "BUILD_TIME", "\"${new Date().format('yyyy-MM-dd HH:mm:ss')}\""
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -34,20 +39,32 @@ android {
         coreLibraryDesugaringEnabled = true
     }
 
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+    lint {
+        disable 'MissingTranslation', 'ExtraTranslation'
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
     splits {
         abi {
-            enable = true
+            enable = false
             reset()
             include 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
             universalApk = true
         }
     }
+
     signingConfigs {
         release {
             storeFile file("release.keystore")
-            storePassword "teamtalk"
-            keyAlias "teamtalk"
-            keyPassword "teamtalk"
+            storePassword System.getenv("RELEASE_STORE_PASSWORD") ?: "teamtalk"
+            keyAlias System.getenv("RELEASE_KEY_ALIAS") ?: "teamtalk"
+            keyPassword System.getenv("RELEASE_KEY_PASSWORD") ?: "teamtalk"
         }
     }
     buildTypes {
@@ -55,34 +72,44 @@ android {
             signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'teamtalk-proguard-rules.txt'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'teamtalk-proguard-rules.txt'
         }
         debug {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'teamtalk-proguard-rules.txt'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'teamtalk-proguard-rules.txt'
         }
     }
-    repositories {
-        google()
-        mavenCentral()
-    }
-    lint {
-        disable 'MissingTranslation', 'ExtraTranslation'
-        checkReleaseBuilds false
-        abortOnError false
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set("TeamTalk.apk")
+        }
     }
 }
+
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-    implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'androidx.annotation:annotation:1.7.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.core:core:1.12.0'
-    implementation 'androidx.fragment:fragment:1.6.2'
+    implementation 'com.google.code.gson:gson:2.13.2'
+    implementation 'androidx.annotation:annotation:1.9.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.activity:activity:1.10.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.fragment:fragment:1.7.1'
     implementation 'androidx.media:media:1.7.0'
     implementation 'androidx.preference:preference:1.2.1'
     implementation 'androidx.viewpager:viewpager:1.0.0'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    
     testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:core:1.6.1'
+    androidTestImplementation 'androidx.test:runner:1.6.1'
+    androidTestImplementation 'androidx.test:rules:1.6.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+    
     implementation files('libs/TeamTalk5.jar')
+
+    add("kotlinCompilerClasspath", "org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.0-Beta1")
 }

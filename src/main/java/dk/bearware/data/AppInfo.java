@@ -10,6 +10,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 import dk.bearware.TeamTalkBase;
+import dk.bearware.gui.BuildConfig;
 
 public class AppInfo {
     public static final String TAG = "bearware";
@@ -17,6 +18,7 @@ public class AppInfo {
     public static final String APPNAME_SHORT = "TeamTalk5Plus";
     public static final String APPVERSION_POSTFIX = "";
     public static final String OSTYPE = "Android";
+    public static final String FOLDER_NAME = "TeamTalk";
 
     public static final String WEBLOGIN_BEARWARE_USERNAME = "bearware";
     public static final String WEBLOGIN_BEARWARE_USERNAMEPOSTFIX = "@bearware.dk";
@@ -27,6 +29,7 @@ public class AppInfo {
         String version = "";
         try {
             version = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
+            version += " (" + BuildConfig.BUILD_TIME + ")";
         }
         catch(NameNotFoundException e) {
             Log.e(TAG, "Unable to get version information");
@@ -35,7 +38,7 @@ public class AppInfo {
     }
 
     public static String getDefautlUrlArgs(Context context) {
-        final String TEAMTALK_VERSION = TeamTalkBase.getVersion();
+        final String TEAMTALK_VERSION = "5.34.4";
         String appversion = getVersion(context);
         return "client=" + APPNAME_SHORT + "&version="
                 + appversion + "&dllversion=" + TEAMTALK_VERSION + "&os=" + OSTYPE;
@@ -78,6 +81,42 @@ public class AppInfo {
                 "&service=bearware&action=clientauth&username=" + username + "&token=" + token +
                 "&accesstoken=" + accesstoken;
         return urlToRead;
+    }
+
+    public static String getPublishServerUrl(Context context, String username, String token) {
+        try {
+            username = URLEncoder.encode(username, "UTF-8");
+            token = URLEncoder.encode(token, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            Log.e(TAG, "Failed to encode publish parameters", e);
+        }
+        return "https://www.bearware.dk/teamtalk/tt5servers.php?" +
+                getDefautlUrlArgs(context) +
+                "&action=publish&username=" + username + "&token=" + token;
+    }
+
+    public static void ensureFoldersExist(android.content.Context context) {
+        try {
+            java.io.File root = new java.io.File(android.os.Environment.getExternalStorageDirectory(), FOLDER_NAME);
+            if (!root.exists()) {
+                if (root.mkdirs()) {
+                    android.util.Log.d(TAG, "Created app root directory: " + root.getAbsolutePath());
+                }
+            } else if (!root.isDirectory()) {
+                android.util.Log.w(TAG, "Root exists but is not a directory: " + root.getAbsolutePath());
+            }
+
+            java.io.File sounds = new java.io.File(root, "Sounds");
+            if (!sounds.exists()) {
+                if (sounds.mkdirs()) {
+                    android.util.Log.d(TAG, "Created sounds directory: " + sounds.getAbsolutePath());
+                }
+            } else if (!sounds.isDirectory()) {
+                android.util.Log.w(TAG, "Sounds path exists but is not a directory: " + sounds.getAbsolutePath());
+            }
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "Failed to ensure folders exist", e);
+        }
     }
 
 }

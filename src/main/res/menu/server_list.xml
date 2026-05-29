@@ -32,5 +32,10 @@
         app:showAsAction="never"
         android:title="@string/action_export_serverlist">
     </item>
+    <item
+        android:id="@+id/action_importlink"
+        app:showAsAction="never"
+        android:title="@string/action_importlink">
+    </item>
 
 </menu>

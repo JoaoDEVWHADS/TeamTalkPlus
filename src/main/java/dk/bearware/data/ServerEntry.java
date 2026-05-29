@@ -1,7 +1,9 @@
-
 package dk.bearware.data;
 
-public class ServerEntry {
+import androidx.annotation.Keep;
+
+@Keep
+public class ServerEntry implements java.io.Serializable {
 
     public enum ServerType {
         LOCAL,

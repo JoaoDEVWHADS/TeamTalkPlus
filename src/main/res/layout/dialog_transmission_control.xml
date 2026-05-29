@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:id="@+id/layout_global_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/scope_global"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:layout_marginBottom="8dp"/>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_voice_global"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/user_prop_title_transmit_voice"
+                android:layout_marginBottom="8dp"/>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_vid_global"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/user_prop_title_transmit_vid"
+                android:layout_marginBottom="8dp"/>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_desk_global"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/user_prop_title_transmit_desk"
+                android:layout_marginBottom="8dp"/>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_media_global"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/user_prop_title_transmit_media"
+                android:layout_marginBottom="8dp"/>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_msg_global"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/user_prop_title_transmit_chanmsg"
+                android:layout_marginBottom="8dp"/>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

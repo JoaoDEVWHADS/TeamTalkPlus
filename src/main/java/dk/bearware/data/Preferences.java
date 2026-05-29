@@ -13,7 +13,8 @@ public class Preferences {
             PREF_GENERAL_BEARWARE_USERNAME = "bearware_username",
             PREF_GENERAL_BEARWARE_TOKEN = "bearware_token",
             PREF_GENERAL_GENDER = "gender_list",
-            PREF_LANGUAGE = "pref_language";
+            PREF_LANGUAGE = "pref_language",
+            PREF_TTS_LANGUAGE_BEHAVIOR = "pref_tts_language_behavior";
     public static final String
             PREF_SOUNDSYSTEM_MEDIAFILE_VOLUME = "mediafilevolume_seekbar",
             PREF_SOUNDSYSTEM_VOICEACTIVATION_LEVEL = "voice_activation_level",

@@ -1,5 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <Preference
+        android:key="pref_master_tts_toggle"
+        android:title="@string/action_select_all" />
 
     <PreferenceCategory
         android:key="tts_def"
@@ -9,6 +12,14 @@
         android:key="pref_speech_engine"
         android:summary="@string/pref_summary_speech_engine"
         android:title="@string/pref_title_speech_engine" />
+
+    <ListPreference
+        android:defaultValue="follow_app"
+        android:entries="@array/pref_tts_language_behavior_entries"
+        android:entryValues="@array/pref_tts_language_behavior_values"
+        android:key="pref_tts_language_behavior"
+        android:summary="@string/pref_summary_tts_language_behavior"
+        android:title="@string/pref_title_tts_language_behavior" />
 
     <CheckBoxPreference
         android:defaultValue="false"
@@ -28,6 +39,7 @@
         android:key="tts_events_def"
         android:title="@string/pref_cat_tts_events">
 
+
     <CheckBoxPreference
         android:defaultValue="true"
         android:key="server_login_checkbox"
@@ -39,6 +51,36 @@
         android:key="server_logout_checkbox"
         android:summary="@string/pref_summary_server_logout"
         android:title="@string/pref_title_server_logout" />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="server_lost_tts_checkbox"
+        android:summary="@string/pref_summary_server_lost_tts"
+        android:title="@string/pref_title_server_lost_tts" />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="user_login_checkbox"
+        android:summary="@string/pref_summary_user_login"
+        android:title="@string/pref_title_user_login" />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="user_logout_checkbox"
+        android:summary="@string/pref_summary_user_logout"
+        android:title="@string/pref_title_user_logout" />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="pref_tts_myself_join"
+        android:summary="@string/pref_summary_myself_join"
+        android:title="@string/pref_title_myself_join" />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="pref_tts_myself_leave"
+        android:summary="@string/pref_summary_myself_leave"
+        android:title="@string/pref_title_myself_leave" />
 
     <CheckBoxPreference
         android:defaultValue="true"
@@ -63,6 +105,11 @@
         android:key="private_message_checkbox"
         android:summary="@string/pref_summary_private_message"
         android:title="@string/pref_title_private_message" />
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="private_message_sent_checkbox"
+        android:summary="@string/pref_summary_private_message_sent"
+        android:title="@string/pref_title_private_message_sent" />
 
     <CheckBoxPreference
         android:defaultValue="true"
@@ -82,11 +129,23 @@
         android:summary="@string/pref_summary_broadcast_message"
         android:title="@string/pref_title_broadcast_message" />
 
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="pref_tts_typing"
+            android:summary="@string/pref_tts_typing_summ"
+            android:title="@string/pref_tts_typing" />
+
     </PreferenceCategory>
 
     <PreferenceCategory
         android:key="tts_events_transmission"
         android:title="@string/pref_cat_tts_transmission">
+
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="pref_tts_transmission_control"
+            android:summary="@string/pref_summary_transmission_control_tts"
+            android:title="@string/pref_title_transmission_control_tts" />
 
         <CheckBoxPreference
             android:defaultValue="true"
