@@ -1,13 +1,13 @@
-name: Android CI/CD Build & Release
+name: Android CI/CD Build
 
 on:
   push:
-    tags:
-      - 'v*' # Dispara o build ao criar uma tag como v5.34.4
-  workflow_dispatch: # Permite rodar o build manualmente pelo painel do GitHub
+    branches:
+      - '**' # Dispara em qualquer commit enviado para qualquer branch
+  pull_request: # Também compila para validar Pull Requests
 
 permissions:
-  contents: write # Necessário para criar a release e fazer upload de arquivos
+  contents: read
 
 jobs:
   build:
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          lfs: true # ESSENCIAL: Garante que os arquivos do Git LFS (.so) sejam baixados
+          lfs: true # Garante que os arquivos do Git LFS (.so) sejam baixados
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -53,14 +53,3 @@ jobs:
         with:
           name: TeamTalk-APK
           path: build/outputs/apk/release/TeamTalk.apk
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            build/outputs/apk/release/TeamTalk.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
