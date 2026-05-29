@@ -22,7 +22,7 @@ jobs:
           lfs: true # Garante que os arquivos do Git LFS (.so) sejam baixados
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
