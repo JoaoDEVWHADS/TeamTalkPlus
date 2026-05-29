@@ -7,7 +7,8 @@ on:
   pull_request: # Também compila para validar Pull Requests
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write # Necessário para aprovar e mesclar PRs automaticamente
 
 jobs:
   build:
@@ -53,3 +54,24 @@ jobs:
         with:
           name: TeamTalk-APK
           path: build/outputs/apk/release/TeamTalk.apk
+
+  automerge:
+    name: Auto-merge Dependabot PRs
+    needs: build
+    runs-on: ubuntu-latest
+    # Executa apenas se o PR foi aberto pelo Dependabot
+    if: github.actor == 'dependabot[bot]' && github.event_name == 'pull_request'
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Approve and merge PR
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

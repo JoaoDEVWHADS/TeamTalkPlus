@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Monitora dependências do Gradle (bibliotecas, plugins e wrapper)
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly" # Verifica atualizações uma vez por semana
+    open-pull-requests-limit: 5
+
+  # Monitora dependências dos workflows do GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
