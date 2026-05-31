@@ -111,6 +111,14 @@ public class UserPropActivity extends AppCompatActivity implements TeamTalkConne
         }
     }
 
+    private String getLabel(int resId) {
+        String label = getString(resId);
+        if (label.endsWith(":")) {
+            label = label.substring(0, label.length() - 1);
+        }
+        return label;
+    }
+
     void showUser() {
         TextView nickname = findViewById(R.id.user_nickname);
         TextView username = findViewById(R.id.user_username);
@@ -140,12 +148,12 @@ public class UserPropActivity extends AppCompatActivity implements TeamTalkConne
         final SwitchCompat subscribeDesk = findViewById(R.id.user_subscribedeskSwitch);
         final SwitchCompat subscribeMedia = findViewById(R.id.user_subscribemediaSwitch);
 
-        nickname.setText(getString(R.string.fmt_colon_label_value, getString(R.string.user_prop_title_nickname), user.szNickname));
-        username.setText(getString(R.string.fmt_colon_label_value, getString(R.string.user_prop_title_username), user.szUsername));
-        userid.setText(getString(R.string.fmt_colon_label_value, getString(R.string.user_prop_title_userid), user.nUserID));
-        statusmsg.setText(getString(R.string.fmt_colon_label_value, getString(R.string.user_prop_title_statusmsg), user.szStatusMsg));
-        clientname.setText(getString(R.string.fmt_colon_label_value, getString(R.string.user_prop_title_clientname), user.szClientName + " " + ((user.uVersion >> 16) & 0xFF) + "." + ((user.uVersion >> 8) & 0xFF) + "." + (user.uVersion & 0xFF)));
-        ipaddress.setText(getString(R.string.fmt_colon_label_value, getString(R.string.user_prop_title_ipaddress), user.szIPAddress));
+        nickname.setText(getString(R.string.fmt_colon_label_value, getLabel(R.string.user_prop_title_nickname), user.szNickname));
+        username.setText(getString(R.string.fmt_colon_label_value, getLabel(R.string.user_prop_title_username), user.szUsername));
+        userid.setText(getString(R.string.fmt_colon_label_value, getLabel(R.string.user_prop_title_userid), user.nUserID));
+        statusmsg.setText(getString(R.string.fmt_colon_label_value, getLabel(R.string.user_prop_title_statusmsg), user.szStatusMsg));
+        clientname.setText(getString(R.string.fmt_colon_label_value, getLabel(R.string.user_prop_title_clientname), user.szClientName + " " + ((user.uVersion >> 16) & 0xFF) + "." + ((user.uVersion >> 8) & 0xFF) + "." + (user.uVersion & 0xFF)));
+        ipaddress.setText(getString(R.string.fmt_colon_label_value, getLabel(R.string.user_prop_title_ipaddress), user.szIPAddress));
         
         if ((user.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN) {
              userType.setText(getString(R.string.fmt_colon_label_value, getString(R.string.user_type), getString(R.string.type_admin)));
