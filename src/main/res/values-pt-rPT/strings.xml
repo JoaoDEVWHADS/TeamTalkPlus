@@ -385,7 +385,7 @@
     <string name="online_user_info_nickname">Apelido</string>
     <string name="online_user_info_statusmsg">Mensagem de Status</string>
     <string name="online_user_info_userid">ID do Utilizador</string>
-    <string name="online_user_info_username">ID de utilizador</string>
+    <string name="online_user_info_username">Nome de utilizador</string>
     <string name="online_users">Utilizadors Online</string>
     <string name="op_password">Palavra-passe de Operador</string>
     <string name="opus_application">Aplicação OPUS&gt;</string>
@@ -611,7 +611,7 @@
     <string name="pref_title_userleft_icon">Utilizador sai do canal</string>
     <string name="pref_title_userloggedin_icon">Som: Outros entram no servidor</string>
     <string name="pref_title_userloggedoff_icon">Som: Outros saem do servidor</string>
-    <string name="pref_title_username">ID de utilizador</string>
+    <string name="pref_title_username">Nome de utilizador</string>
     <string name="pref_title_vibrate">Vibrar ao pressionar o botão pressionar para falar</string>
     <string name="pref_title_voice_processing_checkbox">Ativar áudio processado</string>
     <string name="pref_title_vox_audio_icon">Alternar áudio de ativação por voz</string>
@@ -919,7 +919,7 @@
     <string name="user_prop_title_transmit_vid">Permitir transmissão de vídeo</string>
     <string name="user_prop_title_transmit_voice">Permitir transmissão de voz</string>
     <string name="user_prop_title_userid">ID do Utilizador:</string>
-    <string name="user_prop_title_username">ID de utilizador</string>
+    <string name="user_prop_title_username">Nome de utilizador</string>
     <string name="user_prop_title_voice_volume">Volume da voz</string>
     <string name="user_state_away">Ausente</string>
     <string name="user_state_now_speaking">%1$s microfone ativado</string>

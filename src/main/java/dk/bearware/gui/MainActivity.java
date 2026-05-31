@@ -1132,6 +1132,8 @@ public class MainActivity
 
         }
 
+        private int lastActivePrimaryPageId = CHANNELS_PAGE;
+
         @Override
         public void onPageSelected(int position) {
             int id = getIdForPosition(position);
@@ -1154,13 +1156,16 @@ public class MainActivity
                     if (targetPos != -1) {
                         mViewPager.setCurrentItem(targetPos, false);
                     } else {
-                        mViewPager.setCurrentItem(getPositionForId(CHANNELS_PAGE), false);
+                        mViewPager.setCurrentItem(getPositionForId(lastActivePrimaryPageId), false);
                     }
                 });
                 return;
             }
 
             lastActivePageId = id;
+            if (id == CHANNELS_PAGE || id == MEDIA_PAGE || id == GLOBAL_PAGE || id == CHAT_PAGE || id == PRIVATE_PAGE) {
+                lastActivePrimaryPageId = id;
+            }
 
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             View v = getCurrentFocus();
