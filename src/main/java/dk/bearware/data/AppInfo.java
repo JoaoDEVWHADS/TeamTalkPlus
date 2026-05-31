@@ -38,7 +38,7 @@ public class AppInfo {
     }
 
     public static String getDefautlUrlArgs(Context context) {
-        final String TEAMTALK_VERSION = "5.34.4";
+        final String TEAMTALK_VERSION = "5.34.5";
         String appversion = getVersion(context);
         return "client=" + APPNAME_SHORT + "&version="
                 + appversion + "&dllversion=" + TEAMTALK_VERSION + "&os=" + OSTYPE;
