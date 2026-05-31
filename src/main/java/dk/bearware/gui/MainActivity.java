@@ -1178,6 +1178,14 @@ public class MainActivity
             lastActivePageId = id;
             if (id == CHANNELS_PAGE || id == MEDIA_PAGE || id == GLOBAL_PAGE || id == CHAT_PAGE || id == PRIVATE_PAGE) {
                 lastActivePrimaryPageId = id;
+                if (!isExpanded) {
+                    mViewPager.post(() -> {
+                        int currentId = getIdForPosition(mViewPager.getCurrentItem());
+                        if (!isExpanded && (currentId == CHANNELS_PAGE || currentId == MEDIA_PAGE || currentId == GLOBAL_PAGE || currentId == CHAT_PAGE || currentId == PRIVATE_PAGE)) {
+                            updateTabs(false);
+                        }
+                    });
+                }
             }
 
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
