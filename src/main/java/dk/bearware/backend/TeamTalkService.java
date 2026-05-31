@@ -1267,12 +1267,12 @@ public class TeamTalkService extends Service implements
             }
             
             ttclient.setSoundInputPreprocess(ap);
-            int gain = prefs.getInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, SoundLevel.SOUND_GAIN_DEFAULT);
+            int gain = prefs.getInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, 1300);
             ttclient.setSoundInputGainLevel(gain);
             Log.d(TAG, "WebRTC Audio Preprocessor enabled: AEC=" + ap.webrtc.echocanceller.bEnable + ", NS=" + ap.webrtc.noisesuppression.bEnable + ", Gain=" + gain);
         } else {
             ttclient.setSoundInputPreprocess(new AudioPreprocessor());
-            int gain = prefs.getInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, SoundLevel.SOUND_GAIN_DEFAULT);
+            int gain = prefs.getInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, 1300);
             ttclient.setSoundInputGainLevel(gain);
             Log.d(TAG, "Audio Preprocessor disabled (raw input), Gain=" + gain);
         }

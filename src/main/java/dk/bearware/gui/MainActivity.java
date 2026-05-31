@@ -659,10 +659,10 @@ public class MainActivity
                 getService().unwatchBluetoothHeadset();
 
             int mastervol = prefs.get(Preferences.PREF_SOUNDSYSTEM_MASTERVOLUME, SoundLevel.SOUND_VOLUME_DEFAULT);
-            int gain = prefs.get(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, SoundLevel.SOUND_GAIN_DEFAULT);
+            int gain = prefs.get(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, 1300);
             // Safety: if gain is from a previous high-gain build (e.g. 32000), reset to default 1300
             if (gain > 17500) {
-                gain = SoundLevel.SOUND_GAIN_DEFAULT;
+                gain = 1300;
                 prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, gain);
             }
             int voxlevel = prefs.get(Preferences.PREF_SOUNDSYSTEM_VOICEACTIVATION_LEVEL, 5);
@@ -994,6 +994,7 @@ public class MainActivity
         private final ArrayList<PageItem> allPages = new ArrayList<>();
         private final ArrayList<Integer> pageOrder = new ArrayList<>();
         private boolean isExpanded = false;
+        private int lastActivePageId = CHANNELS_PAGE;
 
         public SectionsPagerAdapter(FragmentManager fm) {
             super(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT);
@@ -1026,7 +1027,7 @@ public class MainActivity
             List<PageItem> secondaryPages = new ArrayList<>();
 
             for (PageItem p : allPages) {
-                if (p.id == FILES_PAGE || p.id == CHANNELS_PAGE || p.id == CHAT_PAGE || p.id == PRIVATE_PAGE) {
+                if (p.id == CHANNELS_PAGE || p.id == MEDIA_PAGE || p.id == GLOBAL_PAGE || p.id == CHAT_PAGE || p.id == PRIVATE_PAGE) {
                     primaryPages.add(p);
                 } else {
                     secondaryPages.add(p);
@@ -1138,21 +1139,28 @@ public class MainActivity
             if (id == MORE_PAGE) {
                 mViewPager.post(() -> {
                     updateTabs(true);
-                    // Select the first secondary tab (index 5: 0-3 primary, 4 Less, 5 First
-                    // Secondary)
-                    if (pageOrder.size() > 5) {
-                        mViewPager.setCurrentItem(5, false); // No smooth scroll to avoid weirdness
+                    int targetPos = getPositionForId(lastActivePageId);
+                    if (targetPos != -1) {
+                        mViewPager.setCurrentItem(targetPos, false);
+                    } else {
+                        mViewPager.setCurrentItem(getPositionForId(CHANNELS_PAGE), false);
                     }
                 });
                 return;
             } else if (id == LESS_PAGE) {
                 mViewPager.post(() -> {
                     updateTabs(false);
-                    // Select the last primary tab (index 3)
-                    mViewPager.setCurrentItem(3, false);
+                    int targetPos = getPositionForId(lastActivePageId);
+                    if (targetPos != -1) {
+                        mViewPager.setCurrentItem(targetPos, false);
+                    } else {
+                        mViewPager.setCurrentItem(getPositionForId(CHANNELS_PAGE), false);
+                    }
                 });
                 return;
             }
+
+            lastActivePageId = id;
 
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             View v = getCurrentFocus();
@@ -3212,7 +3220,7 @@ public class MainActivity
             wakeLock.acquire();
 
         int mastervol = prefs.get(Preferences.PREF_SOUNDSYSTEM_MASTERVOLUME, SoundLevel.SOUND_VOLUME_DEFAULT);
-        int gain = prefs.get(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, SoundLevel.SOUND_GAIN_DEFAULT);
+        int gain = prefs.get(Preferences.PREF_SOUNDSYSTEM_MICROPHONEGAIN, 1300);
         int voxlevel = prefs.get(Preferences.PREF_SOUNDSYSTEM_VOICEACTIVATION_LEVEL, 5);
         boolean voxState = service.isVoiceActivationEnabled();
         boolean txState = service.isVoiceTransmitting();
