@@ -1048,6 +1048,13 @@ public class MainActivity
                 }
             } else {
                 pageOrder.add(MORE_PAGE);
+                // Se a aba ativa atual for uma aba secundária, mantenha-a visível mesmo após o recolhimento
+                for (PageItem p : secondaryPages) {
+                    if (p.id == lastActivePageId) {
+                        pageOrder.add(p.id);
+                        break;
+                    }
+                }
             }
             notifyDataSetChanged();
             updateSwipeRestrictions();
