@@ -1158,9 +1158,15 @@ public class MainActivity
                 return;
             } else if (id == LESS_PAGE) {
                 mViewPager.post(() -> {
+                    // Se a página ativa no momento de clicar em LESS_PAGE era LESS_PAGE ou MORE_PAGE,
+                    // precisamos voltar para a última primária. Mas se o usuário de alguma forma
+                    // estava em outra página, nós preservamos. Como clicar no botão "menos" seleciona
+                    // a página LESS_PAGE (id == LESS_PAGE), a aba ativa REAL que o usuário quer preservar
+                    // é na verdade a última aba selecionada (lastActivePageId), contanto que ela não seja LESS_PAGE.
+                    int pageToPreserve = lastActivePageId;
                     updateTabs(false);
-                    int targetPos = getPositionForId(lastActivePageId);
-                    if (targetPos != -1) {
+                    int targetPos = getPositionForId(pageToPreserve);
+                    if (targetPos != -1 && pageToPreserve != LESS_PAGE && pageToPreserve != MORE_PAGE) {
                         mViewPager.setCurrentItem(targetPos, false);
                     } else {
                         mViewPager.setCurrentItem(getPositionForId(lastActivePrimaryPageId), false);
