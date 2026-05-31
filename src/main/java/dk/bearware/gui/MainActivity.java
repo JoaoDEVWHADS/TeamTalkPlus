@@ -1021,8 +1021,8 @@ public class MainActivity
 
         public void updateTabs(boolean expanded) {
             this.isExpanded = expanded;
-            pageOrder.clear();
 
+            List<Integer> newPageOrder = new ArrayList<>();
             List<PageItem> primaryPages = new ArrayList<>();
             List<PageItem> secondaryPages = new ArrayList<>();
 
@@ -1038,26 +1038,31 @@ public class MainActivity
             Collections.sort(secondaryPages, (p1, p2) -> p1.title.compareTo(p2.title));
 
             for (PageItem p : primaryPages) {
-                pageOrder.add(p.id);
+                newPageOrder.add(p.id);
             }
 
             if (expanded) {
-                pageOrder.add(LESS_PAGE);
+                newPageOrder.add(LESS_PAGE);
                 for (PageItem p : secondaryPages) {
-                    pageOrder.add(p.id);
+                    newPageOrder.add(p.id);
                 }
             } else {
-                pageOrder.add(MORE_PAGE);
+                newPageOrder.add(MORE_PAGE);
                 // Se a aba ativa atual for uma aba secundária, mantenha-a visível mesmo após o recolhimento
                 for (PageItem p : secondaryPages) {
                     if (p.id == lastActivePageId) {
-                        pageOrder.add(p.id);
+                        newPageOrder.add(p.id);
                         break;
                     }
                 }
             }
-            notifyDataSetChanged();
-            updateSwipeRestrictions();
+
+            if (!newPageOrder.equals(pageOrder)) {
+                pageOrder.clear();
+                pageOrder.addAll(newPageOrder);
+                notifyDataSetChanged();
+                updateSwipeRestrictions();
+            }
         }
 
         @Override
