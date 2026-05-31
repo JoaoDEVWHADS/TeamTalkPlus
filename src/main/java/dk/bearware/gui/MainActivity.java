@@ -2697,6 +2697,20 @@ public class MainActivity
 
             androidx.appcompat.widget.PopupMenu popup = new androidx.appcompat.widget.PopupMenu(this, view);
 
+            boolean isSelected = userIDS.contains(user.nUserID);
+            popup.getMenu().add(isSelected ? R.string.action_deselect : R.string.action_select)
+                    .setOnMenuItemClickListener(menuItem -> {
+                        if (isSelected) {
+                            userIDS.remove((Integer) user.nUserID);
+                        } else {
+                            userIDS.add(user.nUserID);
+                        }
+                        accessibilityAssistant.lockEvents();
+                        channelsAdapter.notifyDataSetChanged();
+                        accessibilityAssistant.unlockEvents();
+                        return true;
+                    });
+
             popup.getMenu().add(getString(R.string.info_copy_name))
                     .setOnMenuItemClickListener(menuItem -> handleUserAction(R.string.info_copy_name, user));
             popup.getMenu().add(getString(R.string.info_copy_id))
@@ -3863,7 +3877,19 @@ public class MainActivity
     public void onAccessibilityActionClick(View view, int actionId) {
         Object item = view.getTag();
         if (item instanceof User) {
-            handleUserAction(actionId, (User) item);
+            if (actionId == R.string.action_select || actionId == R.string.action_deselect) {
+                User user = (User) item;
+                if (userIDS.contains(user.nUserID)) {
+                    userIDS.remove((Integer) user.nUserID);
+                } else {
+                    userIDS.add(user.nUserID);
+                }
+                accessibilityAssistant.lockEvents();
+                channelsAdapter.notifyDataSetChanged();
+                accessibilityAssistant.unlockEvents();
+            } else {
+                handleUserAction(actionId, (User) item);
+            }
         } else if (item instanceof Channel) {
             handleChannelAction(actionId, (Channel) item);
         } else if (item instanceof MyTextMessage) {
@@ -3893,6 +3919,11 @@ public class MainActivity
         List<AccessibilityActionCompat> actions = new ArrayList<>();
         if (item instanceof User) {
             User user = (User) item;
+            if (userIDS.contains(user.nUserID)) {
+                actions.add(new AccessibilityActionCompat(R.string.action_deselect, getString(R.string.action_deselect)));
+            } else {
+                actions.add(new AccessibilityActionCompat(R.string.action_select, getString(R.string.action_select)));
+            }
             actions.add(new AccessibilityActionCompat(R.string.info_copy_name, getString(R.string.info_copy_name)));
             actions.add(new AccessibilityActionCompat(R.string.info_copy_id, getString(R.string.info_copy_id)));
             actions.add(new AccessibilityActionCompat(R.string.info_copy_ip, getString(R.string.info_copy_ip)));

@@ -40,7 +40,7 @@
     <string name="action_leave">Sair do canal</string>
     <string name="action_make_operator">Conceder Operador</string>
     <string name="action_message">Mensagens</string>
-    <string name="action_move">Mover para o canal em que você está</string>
+    <string name="action_move">Mover aqui</string>
     <string name="action_move_selected">Mover selecionados para meu canal</string>
     <string name="action_move_short">Mover</string>
     <string name="action_new_account">Nova Conta</string>
