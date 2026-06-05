@@ -38,7 +38,7 @@ jobs:
           echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > release.keystore
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build Release APK
         env:
