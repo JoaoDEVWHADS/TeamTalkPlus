@@ -180,10 +180,9 @@ public class MainActivity
         ClientEventListener.OnCmdFileNewListener,
         AccessibilityAssistant.OnAccessibilityActionClickListener {
 
-    private static final int MIC_INPUT_DEFAULT = 0;
-    private static final int MIC_INPUT_INTERNAL = 1;
-    private static final int MIC_INPUT_EXTERNAL = 2;
+    private static final int MIC_INPUT_DEFAULT = -1;
     private int currentMicInput = MIC_INPUT_DEFAULT;
+    private List<AudioDeviceInfo> availableInputDevices = new ArrayList<>();
 
     private ImageButton micInputButton;
     private BroadcastReceiver headsetReceiver;
@@ -436,18 +435,20 @@ public class MainActivity
 
         micInputButton = findViewById(R.id.mic_input_switch);
         micInputButton.setOnClickListener(v -> showMicInputSelectionDialog());
+        // Show mic button if multiple input devices are available
+        updateMicInputButtonVisibility();
 
         headsetReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 if (Intent.ACTION_HEADSET_PLUG.equals(intent.getAction())) {
                     int state = intent.getIntExtra("state", -1);
-                    if (state == 1) {
-                        micInputButton.setVisibility(View.VISIBLE);
-                    } else {
-                        micInputButton.setVisibility(View.GONE);
-                        // Revert to default if headset unplugged
-                        setAudioInputDevice(MIC_INPUT_DEFAULT);
+                    updateMicInputButtonVisibility();
+                    if (state != 1) {
+                        // Headset unplugged — revert to default
+                        currentMicInput = MIC_INPUT_DEFAULT;
+                        prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, MIC_INPUT_DEFAULT);
+                        audioManager.clearCommunicationDevice();
                     }
                 }
             }
@@ -893,56 +894,171 @@ public class MainActivity
     }
 
     private void showMicInputSelectionDialog() {
-        final CharSequence[] items = {
-                getString(R.string.mic_input_default),
-                getString(R.string.mic_input_internal),
-                getString(R.string.mic_input_external)
-        };
+        // Enumerate available input devices dynamically
+        AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
+        availableInputDevices.clear();
+        List<String> deviceNames = new ArrayList<>();
+
+        // "Default" option always first
+        deviceNames.add(getString(R.string.mic_input_default));
+
+        for (AudioDeviceInfo device : devices) {
+            // Include all microphone types: built-in, wired headset, USB, BLE (API 31+)
+            if (isUsableInputDevice(device.getType())) {
+                availableInputDevices.add(device);
+                deviceNames.add(getDeviceDisplayName(device));
+            }
+        }
+
+        if (deviceNames.size() <= 1) {
+            // Only "Default" option — no extra microphones to choose from
+            Toast.makeText(this, R.string.mic_input_no_devices, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Determine which item is currently selected
+        int selectedIndex = 0; // Default
+        for (int i = 0; i < availableInputDevices.size(); i++) {
+            if (availableInputDevices.get(i).getId() == currentMicInput) {
+                selectedIndex = i + 1; // +1 because "Default" is index 0
+                break;
+            }
+        }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(getString(R.string.mic_input_selection));
-        builder.setSingleChoiceItems(items, currentMicInput, (dialog, item) -> {
-            setAudioInputDevice(item);
-            dialog.dismiss();
-        });
+        builder.setSingleChoiceItems(
+                deviceNames.toArray(new CharSequence[0]),
+                selectedIndex,
+                (dialog, item) -> {
+                    if (item == 0) {
+                        // "Default" selected
+                        currentMicInput = MIC_INPUT_DEFAULT;
+                        prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, MIC_INPUT_DEFAULT);
+                        audioManager.clearCommunicationDevice();
+                    } else {
+                        // Specific device selected
+                        AudioDeviceInfo selected = availableInputDevices.get(item - 1);
+                        currentMicInput = selected.getId();
+                        prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, currentMicInput);
+                        setAudioInputDevice(selected);
+                    }
+                    dialog.dismiss();
+                });
         builder.show();
     }
 
-    private void setAudioInputDevice(int inputType) {
-        currentMicInput = inputType;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (inputType == MIC_INPUT_DEFAULT) {
-                audioManager.clearCommunicationDevice();
-                return;
-            }
-
-            AudioDeviceInfo targetDevice = null;
-            List<AudioDeviceInfo> devices = audioManager.getAvailableCommunicationDevices();
-            for (AudioDeviceInfo device : devices) {
-                if (inputType == MIC_INPUT_INTERNAL && device.getType() == AudioDeviceInfo.TYPE_BUILTIN_MIC) {
-                    targetDevice = device;
-                    break;
-                } else if (inputType == MIC_INPUT_EXTERNAL && (device.getType() == AudioDeviceInfo.TYPE_WIRED_HEADSET
-                        || device.getType() == AudioDeviceInfo.TYPE_WIRED_HEADPHONES)) {
-                    targetDevice = device;
-                    break;
+    /**
+     * Filter: which input device types we surface to the user for selection.
+     * Covers built-in mic, wired headsets, USB, and BLE (API 31+).
+     * Bluetooth SCO/HFP is excluded (narrowband 8kHz, needs separate routing).
+     */
+    private boolean isUsableInputDevice(int type) {
+        switch (type) {
+            case AudioDeviceInfo.TYPE_BUILTIN_MIC:
+            case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+            case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+            case AudioDeviceInfo.TYPE_USB_DEVICE:
+            case AudioDeviceInfo.TYPE_USB_HEADSET:
+                return true;
+            default:
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    return type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                            || type == AudioDeviceInfo.TYPE_BLE_SPEAKER;
                 }
-            }
-            if (targetDevice != null) {
-                audioManager.setCommunicationDevice(targetDevice);
-            }
+                return false;
+        }
+    }
+
+    /**
+     * Get a human-readable display name for an audio device.
+     */
+    private String getDeviceDisplayName(AudioDeviceInfo device) {
+        // Prefer the product name if available
+        CharSequence product = device.getProductName();
+        if (product != null && product.length() > 0) {
+            return product.toString();
+        }
+        // Fallback to type-based name
+        switch (device.getType()) {
+            case AudioDeviceInfo.TYPE_BUILTIN_MIC:
+                return getString(R.string.mic_input_internal);
+            case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+            case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+                return getString(R.string.mic_input_external);
+            case AudioDeviceInfo.TYPE_USB_DEVICE:
+            case AudioDeviceInfo.TYPE_USB_HEADSET:
+                return "USB Microphone";
+            default:
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                        && (device.getType() == AudioDeviceInfo.TYPE_BLE_HEADSET
+                        || device.getType() == AudioDeviceInfo.TYPE_BLE_SPEAKER)) {
+                    return "BLE Headset";
+                }
+                return "Microphone";
+        }
+    }
+
+    /**
+     * Apply the selected device to the audio communication path.
+     * Uses setCommunicationDevice() on API 31+ (system-level routing),
+     * falls back to setSpeakerphoneOn() on older versions.
+     */
+    private void setAudioInputDevice(AudioDeviceInfo device) {
+        if (device == null) {
+            audioManager.clearCommunicationDevice();
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audioManager.setCommunicationDevice(device);
         } else {
-            // Fallback for older Android versions
-            // This is a "hack" as speakerphone primarily controls output but often effects
-            // input routing
-            if (inputType == MIC_INPUT_INTERNAL) {
-                audioManager.setSpeakerphoneOn(true);
-            } else if (inputType == MIC_INPUT_EXTERNAL) {
-                audioManager.setSpeakerphoneOn(false);
-            } else {
-                audioManager.setSpeakerphoneOn(false); // Default usually means headset if plugged in
+            // Legacy fallback: setSpeakerphoneOn affects input routing indirectly
+            boolean isSpeaker = device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
+            audioManager.setSpeakerphoneOn(isSpeaker);
+        }
+    }
+
+    /**
+     * Show/hide the mic input button based on whether multiple input devices exist.
+     */
+    private void updateMicInputButtonVisibility() {
+        AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
+        boolean hasMultipleDevices = false;
+        for (AudioDeviceInfo device : devices) {
+            if (isUsableInputDevice(device.getType())) {
+                if (hasMultipleDevices) {
+                    // Found at least 2 usable devices
+                    micInputButton.setVisibility(View.VISIBLE);
+                    return;
+                }
+                hasMultipleDevices = true;
             }
         }
+        // Only one or zero devices — hide the button
+        micInputButton.setVisibility(View.GONE);
+    }
+
+    /**
+     * Restore the previously selected microphone device from preferences.
+     * Called when the service connects.
+     */
+    private void restoreMicInputPreference() {
+        int savedDeviceId = prefs.get(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, MIC_INPUT_DEFAULT);
+        if (savedDeviceId == MIC_INPUT_DEFAULT) {
+            return;
+        }
+        // Check if the saved device still exists
+        AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
+        for (AudioDeviceInfo device : devices) {
+            if (device.getId() == savedDeviceId && isUsableInputDevice(device.getType())) {
+                currentMicInput = savedDeviceId;
+                setAudioInputDevice(device);
+                return;
+            }
+        }
+        // Saved device no longer available — reset to default
+        currentMicInput = MIC_INPUT_DEFAULT;
+        prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, MIC_INPUT_DEFAULT);
     }
 
     MediaSectionFragment mediaFragment;
@@ -3225,6 +3341,10 @@ public class MainActivity
         if (((flags & ClientFlag.CLIENT_SNDOUTPUT_READY) == 0) &&
                 !getClient().initSoundOutputDevice(outsndid))
             Toast.makeText(this, R.string.err_init_sound_output, Toast.LENGTH_LONG).show();
+
+        // Restore previously selected microphone input device
+        restoreMicInputPreference();
+        updateMicInputButtonVisibility();
 
         if (!restarting) {
             service.setMute(false);

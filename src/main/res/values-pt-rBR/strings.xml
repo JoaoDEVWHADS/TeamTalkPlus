@@ -106,6 +106,7 @@
     <string name="mic_input_default">Padrão (Decisão do Sistema)</string>
     <string name="mic_input_internal">Microfone Interno</string>
     <string name="mic_input_external">Microfone Externo (Fone)</string>
+    <string name="mic_input_no_devices">Nenhum microfone encontrado</string>
     <string name="audio_codec_bps_limit">Limite de BPS do Codec de Áudio</string>
     <string-array name="audio_source_entries">
         <item>Padrão</item>

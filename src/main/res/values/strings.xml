@@ -106,6 +106,7 @@
     <string name="mic_input_default">Default (System Decision)</string>
     <string name="mic_input_internal">Internal Microphone</string>
     <string name="mic_input_external">External Mic (Headset)</string>
+    <string name="mic_input_no_devices">No microphones found</string>
     <string name="audio_codec_bps_limit">Audio Codec BPS Limit</string>
     <string-array name="audio_source_entries">
         <item>Default</item>
