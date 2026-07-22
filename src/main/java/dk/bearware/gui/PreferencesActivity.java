@@ -695,6 +695,8 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
                     }
                     return true;
                 });
+            }
+
             Preference micDevPref = findPreference("pref_key_microphone_device");
             if (micDevPref != null) {
                 micDevPref.setOnPreferenceClickListener(preference -> {
