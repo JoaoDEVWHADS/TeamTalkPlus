@@ -45,7 +45,7 @@ jobs:
         run: |
           # Gerar versão baseada em timestamp UTC
           VERSION_NAME=$(date -u +"%Y%m%d.%H%M%S")
-          VERSION_CODE=$(date -u +"%Y%m%d%H%M")
+          VERSION_CODE=$(date +%s) # Epoch seconds (cabe no int32 do Android: max 2147483647)
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_OUTPUT
           echo "VERSION_CODE=${VERSION_CODE}" >> $GITHUB_OUTPUT
           echo "TAG_NAME=v${VERSION_NAME}" >> $GITHUB_OUTPUT
