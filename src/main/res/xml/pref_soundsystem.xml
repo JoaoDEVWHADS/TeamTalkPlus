@@ -27,6 +27,11 @@
 
 
 
+	<Preference
+		android:key="pref_key_microphone_device"
+		android:title="@string/mic_input_selection"
+		android:summary="@string/mic_input_default" />
+
 	<dk.bearware.gui.SeekBarPreference
 	    android:key="mediafilevolume_seekbar"
 	    android:defaultValue="20"

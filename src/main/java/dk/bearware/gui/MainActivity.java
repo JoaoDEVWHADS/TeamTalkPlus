@@ -931,20 +931,27 @@ public class MainActivity
                 deviceNames.toArray(new CharSequence[0]),
                 selectedIndex,
                 (dialog, item) -> {
+                    String selectedName;
                     if (item == 0) {
                         // "Default" selected
                         currentMicInput = MIC_INPUT_DEFAULT;
                         prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, MIC_INPUT_DEFAULT);
-                        audioManager.clearCommunicationDevice();
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            audioManager.clearCommunicationDevice();
+                        }
+                        selectedName = getString(R.string.mic_input_default);
                     } else {
                         // Specific device selected
                         AudioDeviceInfo selected = availableInputDevices.get(item - 1);
                         currentMicInput = selected.getId();
                         prefs.put(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, currentMicInput);
                         setAudioInputDevice(selected);
+                        selectedName = getDeviceDisplayName(selected);
                     }
+                    Toast.makeText(this, selectedName, Toast.LENGTH_SHORT).show();
                     dialog.dismiss();
                 });
+        builder.setNegativeButton(android.R.string.cancel, null);
         builder.show();
     }
 
@@ -1019,23 +1026,12 @@ public class MainActivity
     }
 
     /**
-     * Show/hide the mic input button based on whether multiple input devices exist.
+     * Show/hide the mic input button. Always keep visible so users can select/inspect inputs anytime.
      */
     private void updateMicInputButtonVisibility() {
-        AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
-        boolean hasMultipleDevices = false;
-        for (AudioDeviceInfo device : devices) {
-            if (isUsableInputDevice(device.getType())) {
-                if (hasMultipleDevices) {
-                    // Found at least 2 usable devices
-                    micInputButton.setVisibility(View.VISIBLE);
-                    return;
-                }
-                hasMultipleDevices = true;
-            }
+        if (micInputButton != null) {
+            micInputButton.setVisibility(View.VISIBLE);
         }
-        // Only one or zero devices — hide the button
-        micInputButton.setVisibility(View.GONE);
     }
 
     /**

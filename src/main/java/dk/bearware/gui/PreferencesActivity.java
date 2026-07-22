@@ -12,6 +12,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.app.AlertDialog;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
@@ -691,6 +694,133 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
                     }
                     return true;
                 });
+            Preference micDevPref = findPreference("pref_key_microphone_device");
+            if (micDevPref != null) {
+                micDevPref.setOnPreferenceClickListener(preference -> {
+                    showMicSelectionDialog();
+                    return true;
+                });
+                updateMicPreferenceSummary(micDevPref);
+            }
+        }
+
+        private void showMicSelectionDialog() {
+            if (getActivity() == null) return;
+            AudioManager audioManager = (AudioManager) getActivity().getSystemService(Context.AUDIO_SERVICE);
+            if (audioManager == null) return;
+
+            AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
+            List<AudioDeviceInfo> availableInputDevices = new ArrayList<>();
+            List<String> deviceNames = new ArrayList<>();
+
+            deviceNames.add(getString(R.string.mic_input_default));
+
+            for (AudioDeviceInfo device : devices) {
+                if (isUsableInputDevice(device.getType())) {
+                    availableInputDevices.add(device);
+                    deviceNames.add(getDeviceDisplayName(device));
+                }
+            }
+
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity().getApplicationContext());
+            int currentMicInput = prefs.getInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, -1);
+
+            int selectedIndex = 0;
+            for (int i = 0; i < availableInputDevices.size(); i++) {
+                if (availableInputDevices.get(i).getId() == currentMicInput) {
+                    selectedIndex = i + 1;
+                    break;
+                }
+            }
+
+            new AlertDialog.Builder(getActivity())
+                    .setTitle(getString(R.string.mic_input_selection))
+                    .setSingleChoiceItems(
+                            deviceNames.toArray(new CharSequence[0]),
+                            selectedIndex,
+                            (dialog, item) -> {
+                                if (item == 0) {
+                                    prefs.edit().putInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, -1).apply();
+                                    audioManager.clearCommunicationDevice();
+                                } else {
+                                    AudioDeviceInfo selected = availableInputDevices.get(item - 1);
+                                    prefs.edit().putInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, selected.getId()).apply();
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        audioManager.setCommunicationDevice(selected);
+                                    } else {
+                                        boolean isSpeaker = selected.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
+                                        audioManager.setSpeakerphoneOn(isSpeaker);
+                                    }
+                                }
+                                Preference micDevPref = findPreference("pref_key_microphone_device");
+                                if (micDevPref != null) {
+                                    updateMicPreferenceSummary(micDevPref);
+                                }
+                                dialog.dismiss();
+                            })
+                    .show();
+        }
+
+        private void updateMicPreferenceSummary(Preference micDevPref) {
+            if (getActivity() == null) return;
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity().getApplicationContext());
+            int currentMicInput = prefs.getInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, -1);
+            if (currentMicInput == -1) {
+                micDevPref.setSummary(getString(R.string.mic_input_default));
+                return;
+            }
+
+            AudioManager audioManager = (AudioManager) getActivity().getSystemService(Context.AUDIO_SERVICE);
+            if (audioManager != null) {
+                AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
+                for (AudioDeviceInfo device : devices) {
+                    if (device.getId() == currentMicInput) {
+                        micDevPref.setSummary(getDeviceDisplayName(device));
+                        return;
+                    }
+                }
+            }
+            micDevPref.setSummary(getString(R.string.mic_input_default));
+        }
+
+        private boolean isUsableInputDevice(int type) {
+            switch (type) {
+                case AudioDeviceInfo.TYPE_BUILTIN_MIC:
+                case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+                case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+                case AudioDeviceInfo.TYPE_USB_DEVICE:
+                case AudioDeviceInfo.TYPE_USB_HEADSET:
+                    return true;
+                default:
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        return type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                                || type == AudioDeviceInfo.TYPE_BLE_SPEAKER;
+                    }
+                    return false;
+            }
+        }
+
+        private String getDeviceDisplayName(AudioDeviceInfo device) {
+            CharSequence product = device.getProductName();
+            if (product != null && product.length() > 0) {
+                return product.toString();
+            }
+            switch (device.getType()) {
+                case AudioDeviceInfo.TYPE_BUILTIN_MIC:
+                    return getString(R.string.mic_input_internal);
+                case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+                case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+                    return getString(R.string.mic_input_external);
+                case AudioDeviceInfo.TYPE_USB_DEVICE:
+                case AudioDeviceInfo.TYPE_USB_HEADSET:
+                    return "USB Microphone";
+                default:
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                            && (device.getType() == AudioDeviceInfo.TYPE_BLE_HEADSET
+                            || device.getType() == AudioDeviceInfo.TYPE_BLE_SPEAKER)) {
+                        return "BLE Headset";
+                    }
+                    return "Microphone";
             }
         }
     }
