@@ -1198,16 +1198,16 @@ public class TeamTalkService extends Service implements
         boolean voiceProcessing = sharedPrefs.getBoolean(Preferences.PREF_SOUNDSYSTEM_VOICEPROCESSING, false);
         boolean speakerphone = sharedPrefs.getBoolean(Preferences.PREF_SOUNDSYSTEM_SPEAKERPHONE, false);
         boolean headset = audioManager.isWiredHeadsetOn();
-
-        // 1. Set Mode (Always MODE_IN_COMMUNICATION for proper input routing when mic preference is set or voice processing active)
         int selectedMicId = sharedPrefs.getInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, -1);
-        int targetMode = (voiceProcessing || selectedMicId != -1) ? AudioManager.MODE_IN_COMMUNICATION : AudioManager.MODE_NORMAL;
+
+        // 1. Set Mode (Use MODE_IN_COMMUNICATION only when voice processing / AEC is requested, avoiding forced DSP noise reduction)
+        int targetMode = voiceProcessing ? AudioManager.MODE_IN_COMMUNICATION : AudioManager.MODE_NORMAL;
         if (audioManager.getMode() != targetMode) {
             audioManager.setMode(targetMode);
         }
 
         // 2. Request Audio Focus with matching stream
-        int streamType = (voiceProcessing || selectedMicId != -1) ? AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC;
+        int streamType = voiceProcessing ? AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC;
         audioManager.requestAudioFocus(focusChange -> {}, streamType, AudioManager.AUDIOFOCUS_GAIN);
 
         // 3. Apply custom selected microphone device if API 31+
@@ -1226,6 +1226,8 @@ public class TeamTalkService extends Service implements
                     Log.d(TAG, "Audio Routing applied custom communication device: " + targetDev.getProductName());
                     return;
                 }
+            } else {
+                audioManager.clearCommunicationDevice();
             }
         }
 
