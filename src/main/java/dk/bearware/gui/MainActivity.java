@@ -1008,20 +1008,47 @@ public class MainActivity
 
     /**
      * Apply the selected device to the audio communication path.
-     * Uses setCommunicationDevice() on API 31+ (system-level routing),
-     * falls back to setSpeakerphoneOn() on older versions.
+     * Restarts voice transmission and re-initializes sound input device if session active.
      */
     private void setAudioInputDevice(AudioDeviceInfo device) {
         if (device == null) {
-            audioManager.clearCommunicationDevice();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.clearCommunicationDevice();
+            }
             return;
         }
+
+        TeamTalkService ttService = getService();
+        boolean wasTransmitting = (ttService != null && ttService.isVoiceTransmitting());
+
+        // 1. Stop current recording/transmission session before changing mic
+        if (wasTransmitting) {
+            ttService.enableVoiceTransmission(false);
+        }
+
+        // 2. Set new audio device routing
+        boolean routeSuccess = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            audioManager.setCommunicationDevice(device);
+            routeSuccess = audioManager.setCommunicationDevice(device);
         } else {
-            // Legacy fallback: setSpeakerphoneOn affects input routing indirectly
             boolean isSpeaker = device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
             audioManager.setSpeakerphoneOn(isSpeaker);
+            routeSuccess = true;
+        }
+
+        // 3. Re-initialize sound input device if connected to service
+        if (ttService != null && getClient() != null) {
+            int indevid = SoundDeviceConstants.TT_SOUNDDEVICE_ID_OPENSLES_DEFAULT;
+            getClient().closeSoundInputDevice();
+            boolean initOk = getClient().initSoundInputDevice(indevid);
+            if (!initOk && !routeSuccess) {
+                Log.w(TAG, "Microphone initialization failed for device: " + device.getId());
+            }
+        }
+
+        // 4. Reactivate session with the new mic if it was transmitting
+        if (wasTransmitting && ttService != null) {
+            ttService.enableVoiceTransmission(true);
         }
     }
 

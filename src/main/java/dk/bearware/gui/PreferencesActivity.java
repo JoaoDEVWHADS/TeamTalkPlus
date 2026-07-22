@@ -47,6 +47,7 @@ import dk.bearware.ClientEvent;
 import dk.bearware.StreamType;
 import dk.bearware.TeamTalkBase;
 import dk.bearware.User;
+import dk.bearware.backend.SoundDeviceConstants;
 import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
 import dk.bearware.backend.TeamTalkConstants;
@@ -741,15 +742,38 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
                             (dialog, item) -> {
                                 if (item == 0) {
                                     prefs.edit().putInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, -1).apply();
-                                    audioManager.clearCommunicationDevice();
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        audioManager.clearCommunicationDevice();
+                                    }
                                 } else {
                                     AudioDeviceInfo selected = availableInputDevices.get(item - 1);
-                                    prefs.edit().putInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, selected.getId()).apply();
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                        audioManager.setCommunicationDevice(selected);
-                                    } else {
-                                        boolean isSpeaker = selected.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
-                                        audioManager.setSpeakerphoneOn(isSpeaker);
+                                    if (selected != null) {
+                                        prefs.edit().putInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, selected.getId()).apply();
+                                        
+                                        TeamTalkService service = null;
+                                        if (getActivity() instanceof PreferencesActivity) {
+                                            service = ((PreferencesActivity) getActivity()).getService();
+                                        }
+                                        boolean wasTx = (service != null && service.isVoiceTransmitting());
+                                        if (wasTx) {
+                                            service.enableVoiceTransmission(false);
+                                        }
+
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                            audioManager.setCommunicationDevice(selected);
+                                        } else {
+                                            boolean isSpeaker = selected.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
+                                            audioManager.setSpeakerphoneOn(isSpeaker);
+                                        }
+
+                                        if (service != null && service.getClient() != null) {
+                                            service.getClient().closeSoundInputDevice();
+                                            service.getClient().initSoundInputDevice(SoundDeviceConstants.TT_SOUNDDEVICE_ID_OPENSLES_DEFAULT);
+                                        }
+
+                                        if (wasTx && service != null) {
+                                            service.enableVoiceTransmission(true);
+                                        }
                                     }
                                 }
                                 Preference micDevPref = findPreference("pref_key_microphone_device");
