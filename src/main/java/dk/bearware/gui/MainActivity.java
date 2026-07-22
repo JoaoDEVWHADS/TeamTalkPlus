@@ -1029,9 +1029,14 @@ public class MainActivity
         // 2. Set new audio device routing
         boolean routeSuccess = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            routeSuccess = audioManager.setCommunicationDevice(device);
+            if (device != null) {
+                routeSuccess = audioManager.setCommunicationDevice(device);
+            } else {
+                audioManager.clearCommunicationDevice();
+                routeSuccess = true;
+            }
         } else {
-            boolean isSpeaker = device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
+            boolean isSpeaker = (device != null && device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER);
             audioManager.setSpeakerphoneOn(isSpeaker);
             routeSuccess = true;
         }
