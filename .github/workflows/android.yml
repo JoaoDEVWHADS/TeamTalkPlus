@@ -60,9 +60,9 @@ jobs:
 
       - name: Update AppInfo.java
         run: |
-          sed -i 's/TEAMTALK_VERSION = "[^"]*"/TEAMTALK_VERSION = "${{ steps.version.outputs.VERSION_NAME }}"/' src/main/java/dk/bearware/data/AppInfo.java
+          sed -i "s/TEAMTALK_VERSION = \"[^\"]*\"/TEAMTALK_VERSION = \"${{ steps.version.outputs.VERSION_NAME }}\"/" src/main/java/dk/bearware/data/AppInfo.java
           echo "AppInfo.java atualizado:"
-          grep "TEAMTALK_VERSION" src/main/java/dk/bearware/data/AppInfo.java
+          grep "TEAMTALK_VERSION" src/main/java/dk/bearware/data/AppInfo.java || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
