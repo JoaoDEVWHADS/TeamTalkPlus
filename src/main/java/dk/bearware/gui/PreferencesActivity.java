@@ -47,7 +47,7 @@ import dk.bearware.ClientEvent;
 import dk.bearware.StreamType;
 import dk.bearware.TeamTalkBase;
 import dk.bearware.User;
-import dk.bearware.backend.SoundDeviceConstants;
+import dk.bearware.SoundDeviceConstants;
 import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
 import dk.bearware.backend.TeamTalkConstants;
@@ -752,10 +752,8 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
                                     if (selected != null) {
                                         prefs.edit().putInt(Preferences.PREF_SOUNDSYSTEM_MICROPHONE_DEVICE, selected.getId()).apply();
                                         
-                                        TeamTalkService service = null;
-                                        if (getActivity() instanceof PreferencesActivity) {
-                                            service = ((PreferencesActivity) getActivity()).getService();
-                                        }
+                                        PreferencesActivity act = (PreferencesActivity) getActivity();
+                                        TeamTalkService service = (act != null) ? act.getService() : null;
                                         boolean wasTx = (service != null && service.isVoiceTransmitting());
                                         if (wasTx) {
                                             service.enableVoiceTransmission(false);
@@ -768,9 +766,9 @@ public class PreferencesActivity extends PreferenceActivity implements TeamTalkC
                                             audioManager.setSpeakerphoneOn(isSpeaker);
                                         }
 
-                                        if (service != null && service.getClient() != null) {
-                                            service.getClient().closeSoundInputDevice();
-                                            service.getClient().initSoundInputDevice(SoundDeviceConstants.TT_SOUNDDEVICE_ID_OPENSLES_DEFAULT);
+                                        if (act != null && act.getClient() != null) {
+                                            act.getClient().closeSoundInputDevice();
+                                            act.getClient().initSoundInputDevice(SoundDeviceConstants.TT_SOUNDDEVICE_ID_OPENSLES_DEFAULT);
                                         }
 
                                         if (wasTx && service != null) {
