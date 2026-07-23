@@ -345,10 +345,7 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
                 default:
                     break;
                 }
-                if (progress && accessibilityAssistant.isUiUpdateDiscouraged()) {
-                    needRefresh = true;
-                }
-                else if (newState) {
+                if (newState) {
                     notifyDataSetChanged();
                 }
             }
