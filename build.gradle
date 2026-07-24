@@ -4,7 +4,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.0-Beta1"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20-Beta2"
     }
 }
 
@@ -111,5 +111,5 @@ dependencies {
     
     implementation files('libs/TeamTalk5.jar')
 
-    add("kotlinCompilerClasspath", "org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.0-Beta1")
+    add("kotlinCompilerClasspath", "org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.20-Beta2")
 }
