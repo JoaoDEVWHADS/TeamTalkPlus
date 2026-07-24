@@ -97,7 +97,7 @@ dependencies {
     implementation 'androidx.activity:activity:1.10.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
     implementation 'androidx.core:core:1.13.1'
-    implementation 'androidx.fragment:fragment:1.7.1'
+    implementation 'androidx.fragment:fragment:1.8.9'
     implementation 'androidx.media:media:1.7.0'
     implementation 'androidx.preference:preference:1.2.1'
     implementation 'androidx.viewpager:viewpager:1.0.0'
