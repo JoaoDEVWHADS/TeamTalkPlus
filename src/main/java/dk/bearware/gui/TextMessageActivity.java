@@ -141,6 +141,7 @@ extends AppCompatActivity implements TeamTalkConnectionListener, ClientEventList
         lv.setTranscriptMode(ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL);
         lv.setAdapter(adapter);
         adapter.notifyDataSetChanged();
+        accessibilityAssistant.focusLastListItem(lv);
 
         Button send_btn = this.findViewById(R.id.user_im_sendbtn);
         final EditText send_msg = this.findViewById(R.id.user_im_edittext);

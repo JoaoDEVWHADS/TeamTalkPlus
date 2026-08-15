@@ -909,7 +909,8 @@ public class Utils {
 
         double d = (volume + 50) / 82.832;
         d = Math.log(d) / 0.0508;
-        return (int)(d + .5);
+        int percent = (int)(d + .5);
+        return Math.max(0, Math.min(100, percent));
     }
 
     public static int refGain(double percent)

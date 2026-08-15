@@ -9,7 +9,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.Button;
+import android.widget.ListView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -93,6 +95,30 @@ public class AccessibilityAssistant extends AccessibilityDelegateCompat {
     public void setVisiblePage(int id) {
         visiblePageId = id;
         visiblePage = monitoredPages.get(id);
+    }
+
+    public void focusLastListItem(ListView listView) {
+        if (listView == null || listView.getCount() == 0)
+            return;
+
+        int lastPosition = listView.getCount() - 1;
+        listView.setSelection(lastPosition);
+        listView.post(() -> {
+            if (listView.getCount() == 0)
+                return;
+
+            int currentLastPosition = listView.getCount() - 1;
+            listView.setSelection(currentLastPosition);
+            if (!isServiceActive())
+                return;
+
+            listView.post(() -> {
+                int childIndex = currentLastPosition - listView.getFirstVisiblePosition();
+                View lastItem = listView.getChildAt(childIndex);
+                if (lastItem != null)
+                    lastItem.performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null);
+            });
+        });
     }
 
     @Override

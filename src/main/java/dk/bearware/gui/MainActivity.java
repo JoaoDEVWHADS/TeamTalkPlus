@@ -253,6 +253,7 @@ public class MainActivity
     FileListAdapter filesAdapter;
     TextMessageAdapter textmsgAdapter;
     TextMessageAdapter channelChatAdapter, globalChatAdapter, eventHistoryAdapter;
+    ListView channelChatListView, globalChatListView, eventHistoryListView;
     PrivateConversationsAdapter privateConversationsAdapter;
     OnlineUsersAdapter onlineUsersAdapter;
     MediaAdapter mediaAdapter;
@@ -1201,6 +1202,16 @@ public class MainActivity
             accessibilityAssistant.setVisiblePage(id);
             invalidateOptionsMenu();
 
+            ListView messageList = null;
+            if (id == CHAT_PAGE)
+                messageList = channelChatListView;
+            else if (id == GLOBAL_PAGE)
+                messageList = globalChatListView;
+            else if (id == EVENT_HISTORY_PAGE)
+                messageList = eventHistoryListView;
+            if (messageList != null)
+                accessibilityAssistant.focusLastListItem(messageList);
+
             if (id == SETTINGS_PAGE) {
                 mTabLayout.setVisibility(View.GONE);
             } else {
@@ -1482,8 +1493,10 @@ public class MainActivity
                 return false;
             });
             ListView chatlog = rootView.findViewById(R.id.channel_im_listview);
+            mainActivity.channelChatListView = chatlog;
             chatlog.setTranscriptMode(ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL);
             chatlog.setAdapter(mainActivity.channelChatAdapter);
+            mainActivity.accessibilityAssistant.focusLastListItem(chatlog);
 
             Button sendBtn = rootView.findViewById(R.id.channel_im_sendbtn);
             sendBtn.setOnClickListener(arg0 -> sendMsgToChannel());
@@ -1593,11 +1606,14 @@ public class MainActivity
             mainActivity.accessibilityAssistant.registerPage(rootView, SectionsPagerAdapter.GLOBAL_PAGE);
 
             ListView msgList = rootView.findViewById(R.id.global_msg_listview);
+            mainActivity.globalChatListView = msgList;
             View emptyView = rootView.findViewById(R.id.empty_view);
             if (emptyView != null) {
                 msgList.setEmptyView(emptyView);
             }
+            msgList.setTranscriptMode(ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL);
             msgList.setAdapter(mainActivity.globalChatAdapter);
+            mainActivity.accessibilityAssistant.focusLastListItem(msgList);
 
             editMsg = rootView.findViewById(R.id.global_msg_edittext);
             Button sendBtn = rootView.findViewById(R.id.global_msg_sendbtn);
@@ -1661,12 +1677,15 @@ public class MainActivity
             mainActivity.accessibilityAssistant.registerPage(rootView, SectionsPagerAdapter.EVENT_HISTORY_PAGE);
 
             ListView msgList = rootView.findViewById(R.id.global_msg_listview);
+            mainActivity.eventHistoryListView = msgList;
             View emptyView = rootView.findViewById(R.id.empty_view);
             if (emptyView != null) {
                 msgList.setEmptyView(emptyView);
             }
 
+            msgList.setTranscriptMode(ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL);
             msgList.setAdapter(mainActivity.eventHistoryAdapter);
+            mainActivity.accessibilityAssistant.focusLastListItem(msgList);
 
             View editMsg = rootView.findViewById(R.id.global_msg_edittext);
             View sendBtn = rootView.findViewById(R.id.global_msg_sendbtn);
@@ -2968,6 +2987,10 @@ public class MainActivity
             isMuted = (getClient().getSoundOutputVolume() == 0);
         }
 
+        SeekBar masterSeekBar = findViewById(R.id.master_volSeekBar);
+        if (masterSeekBar != null)
+            masterSeekBar.setEnabled(!isMuted);
+
         if (isMuted) {
             btn.setImageResource(R.drawable.mute_blue);
             btn.setContentDescription(getString(R.string.speaker_unmute));
@@ -3086,11 +3109,9 @@ public class MainActivity
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (seekBar == masterSeekBar) {
-                    if (getService().isMute()) {
-                        getService().setMute(false);
-                        ImageButton speakerBtn = findViewById(R.id.speakerBtn);
-                        adjustMuteButton(speakerBtn);
-                    }
+                    if (!fromUser || getService().isMute())
+                        return;
+
                     int outputVolume = Utils.refVolume(progress);
                     getClient().setSoundOutputVolume(outputVolume);
                     prefs.put(Preferences.PREF_SOUNDSYSTEM_MASTERVOLUME, outputVolume);
@@ -3151,7 +3172,9 @@ public class MainActivity
                 }
                 adjustMuteButton((ImageButton) v);
 
-                int level = getService().isMute() ? 0 : Utils.refVolumeToPercent(getClient().getSoundOutputVolume());
+                int savedVolume = prefs.get(Preferences.PREF_SOUNDSYSTEM_MASTERVOLUME,
+                        SoundLevel.SOUND_VOLUME_DEFAULT);
+                int level = Utils.refVolumeToPercent(savedVolume);
                 volLevel.setText(level + getString(R.string.unit_percent));
                 volLevel.setContentDescription(
                         getString(R.string.speaker_volume_description, volLevel.getText().toString()));
