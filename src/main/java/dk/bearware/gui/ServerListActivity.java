@@ -388,8 +388,10 @@ public class ServerListActivity extends AppCompatActivity
                 if(resultCode == RESULT_OK) {
                     ServerEntry entry = Utils.getServerEntry(data);
                     if(entry != null) {
-                        servers.add(entry);
-                        Collections.sort(servers, this);
+                        synchronized (servers) {
+                            addOrUpdateSavedServer(entry);
+                            Collections.sort(servers, this);
+                        }
                         adapter.updateServers();
                         saveServers();
                     }
@@ -675,11 +677,10 @@ public class ServerListActivity extends AppCompatActivity
     }
 
     private void importServerEntries(Vector<ServerEntry> entries, boolean navigateToHome) {
-         for (ServerEntry entry : entries) {
-            entry.servertype = ServerEntry.ServerType.LOCAL;
-         }
          synchronized (servers) {
-            servers.addAll(entries);
+            for (ServerEntry entry : entries) {
+                addOrUpdateSavedServer(entry);
+            }
             Collections.sort(servers, this);
          }
          adapter.updateServers();
@@ -691,6 +692,27 @@ public class ServerListActivity extends AppCompatActivity
              intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
              startActivity(intent);
          }
+    }
+
+    private void addOrUpdateSavedServer(ServerEntry incoming) {
+        incoming.servertype = ServerEntry.ServerType.LOCAL;
+
+        String incomingName = normalizeSavedServerName(incoming.servername);
+        if (!incomingName.isEmpty()) {
+            for (int i = servers.size() - 1; i >= 0; i--) {
+                ServerEntry existing = servers.get(i);
+                if (existing.servertype == ServerEntry.ServerType.LOCAL
+                        && incomingName.equals(normalizeSavedServerName(existing.servername))) {
+                    servers.remove(i);
+                }
+            }
+        }
+
+        servers.add(incoming);
+    }
+
+    private String normalizeSavedServerName(String serverName) {
+        return serverName == null ? "" : serverName.trim().toLowerCase(Locale.ROOT);
     }
 
     private void showImportLinkDialog() {

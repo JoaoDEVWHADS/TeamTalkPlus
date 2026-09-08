@@ -2,12 +2,10 @@
 package dk.bearware.data;
 
 import android.content.Context;
-import android.content.pm.PackageManager.NameNotFoundException;
 import android.util.Log;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 import dk.bearware.TeamTalkBase;
 import dk.bearware.gui.BuildConfig;
@@ -26,22 +24,14 @@ public class AppInfo {
     public static String BEARWARE_REGISTRATION_WEBSITE = "http://www.bearware.dk";
 
     public static String getVersion(Context context) {
-        String version = "";
-        try {
-            version = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
-            version += " (" + BuildConfig.BUILD_TIME + ")";
-        }
-        catch(NameNotFoundException e) {
-            Log.e(TAG, "Unable to get version information");
-        }
-        return version;
+        return BuildConfig.VERSION_NAME;
     }
 
     public static String getDefautlUrlArgs(Context context) {
-        final String TEAMTALK_VERSION = "5.34.8";
         String appversion = getVersion(context);
+        String dllversion = TeamTalkBase.getVersion();
         return "client=" + APPNAME_SHORT + "&version="
-                + appversion + "&dllversion=" + TEAMTALK_VERSION + "&os=" + OSTYPE;
+                + appversion + "&dllversion=" + dllversion + "&os=" + OSTYPE;
     }
 
     public static String getServerListURL(Context context, boolean official, boolean unofficial) {

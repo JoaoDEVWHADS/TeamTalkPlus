@@ -12,6 +12,12 @@ plugins {
     id 'com.android.application' version '9.1.0'
 }
 
+// Single source of truth for the app build version.
+def buildTimestamp = new Date()
+def buildTimeZone = TimeZone.getTimeZone('UTC')
+def generatedVersionName = buildTimestamp.format('yyyy-MM-dd.HHmm', buildTimeZone)
+def generatedVersionCode = (buildTimestamp.time / 1000L) as int
+
 android {
     namespace = 'dk.bearware.gui'
     compileSdk 35
@@ -28,10 +34,9 @@ android {
         applicationId = 'com.teamtalk.plus'
         minSdk 21
         targetSdk 35
-        versionCode 53408
-        versionName '5.34.8'
+        versionCode generatedVersionCode
+        versionName generatedVersionName
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
-        buildConfigField "String", "BUILD_TIME", "\"${new Date().format('yyyy-MM-dd HH:mm:ss')}\""
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -112,4 +117,13 @@ dependencies {
     implementation files('libs/TeamTalk5.jar')
 
     add("kotlinCompilerClasspath", "org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.0-Beta1")
+}
+
+
+tasks.register("writeBuildVersion") {
+    def versionFile = layout.buildDirectory.file("generated-version.txt")
+    outputs.file(versionFile)
+    doLast {
+        versionFile.get().asFile.text = generatedVersionName + System.lineSeparator()
+    }
 }

@@ -40,30 +40,6 @@ jobs:
           fi
           echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > release.keystore
 
-      - name: Generate Version
-        id: version
-        run: |
-          # Gerar versão baseada em timestamp UTC
-          VERSION_NAME=$(date -u +"%Y%m%d.%H%M%S")
-          VERSION_CODE=$(date +%s) # Epoch seconds (cabe no int32 do Android: max 2147483647)
-          echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_OUTPUT
-          echo "VERSION_CODE=${VERSION_CODE}" >> $GITHUB_OUTPUT
-          echo "TAG_NAME=v${VERSION_NAME}" >> $GITHUB_OUTPUT
-          echo "Versão gerada: ${VERSION_NAME} (code: ${VERSION_CODE})"
-
-      - name: Update build.gradle
-        run: |
-          sed -i "s/versionCode [0-9]*/versionCode ${{ steps.version.outputs.VERSION_CODE }}/" build.gradle
-          sed -i "s/versionName '[^']*'/versionName '${{ steps.version.outputs.VERSION_NAME }}'/" build.gradle
-          echo "build.gradle atualizado:"
-          grep -E "versionCode|versionName" build.gradle
-
-      - name: Update AppInfo.java
-        run: |
-          sed -i "s/TEAMTALK_VERSION = \"[^\"]*\"/TEAMTALK_VERSION = \"${{ steps.version.outputs.VERSION_NAME }}\"/" src/main/java/dk/bearware/data/AppInfo.java
-          echo "AppInfo.java atualizado:"
-          grep "TEAMTALK_VERSION" src/main/java/dk/bearware/data/AppInfo.java || true
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -74,7 +50,15 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease writeBuildVersion
+
+      - name: Read Build Version
+        id: version
+        run: |
+          VERSION_NAME=$(tr -d '\r\n' < build/generated-version.txt)
+          echo "VERSION_NAME=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "TAG_NAME=v${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Versão do APK: ${VERSION_NAME}"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
