@@ -55,7 +55,6 @@ import java.util.Set;
 import java.util.Vector;
 
 import javax.xml.parsers.DocumentBuilder;
-import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import dk.bearware.backend.TeamTalkService;
@@ -652,8 +651,8 @@ public class Utils {
         factory.setXIncludeAware(false);
         factory.setExpandEntityReferences(false);
         try {
-            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
-            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "");
+            factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "");
         } catch (IllegalArgumentException ignored) {
             // Older Android parsers may not expose these JAXP attributes.
         }
