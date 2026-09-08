@@ -15,7 +15,7 @@ plugins {
 // Single source of truth for the app build version.
 def buildTimestamp = new Date()
 def buildTimeZone = TimeZone.getTimeZone('UTC')
-def generatedVersionName = buildTimestamp.format('yyyy-MM-dd.HHmm', buildTimeZone)
+def generatedVersionName = buildTimestamp.format('yyyyMMdd.HHmmss', buildTimeZone)
 def generatedVersionCode = (buildTimestamp.time / 1000L) as int
 
 android {

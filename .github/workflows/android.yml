@@ -52,13 +52,18 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease writeBuildVersion
 
-      - name: Read Build Version
+      - name: Read Build Version (legacy updater format)
         id: version
         run: |
           VERSION_NAME=$(tr -d '\r\n' < build/generated-version.txt)
+          if ! [[ "$VERSION_NAME" =~ ^[0-9]{8}\.[0-9]{6}$ ]]; then
+            echo "Erro: versão '$VERSION_NAME' não está no formato yyyyMMdd.HHmmss"
+            exit 1
+          fi
           echo "VERSION_NAME=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
           echo "TAG_NAME=v${VERSION_NAME}" >> "$GITHUB_OUTPUT"
           echo "Versão do APK: ${VERSION_NAME}"
+          echo "Tag da release: v${VERSION_NAME}"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
