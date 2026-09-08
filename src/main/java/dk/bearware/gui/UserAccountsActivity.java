@@ -202,7 +202,8 @@ public class UserAccountsActivity extends AppCompatActivity implements
             for (UserAccount acc : allAccounts) {
                 String username = acc.szUsername == null ? "" : acc.szUsername;
                 String note = acc.szNote == null ? "" : acc.szNote;
-                if (username.toLowerCase().contains(q) || note.toLowerCase().contains(q)) {
+                String channel = acc.szInitChannel == null ? "" : acc.szInitChannel;
+                if (username.toLowerCase().contains(q) || note.toLowerCase().contains(q) || channel.toLowerCase().contains(q)) {
                     filteredAccounts.add(acc);
                 }
             }
@@ -346,50 +347,98 @@ public class UserAccountsActivity extends AppCompatActivity implements
 
     private class UserAccountAdapter extends ArrayAdapter<UserAccount> {
         public UserAccountAdapter(Context context, List<UserAccount> accounts) {
-            super(context, android.R.layout.simple_list_item_2, accounts);
+            super(context, R.layout.item_user_account, accounts);
         }
 
         @NonNull
         @Override
         public View getView(int position, View convertView, @NonNull ViewGroup parent) {
             if (convertView == null) {
-                convertView = LayoutInflater.from(getContext()).inflate(android.R.layout.simple_list_item_2, parent, false);
+                convertView = LayoutInflater.from(getContext()).inflate(R.layout.item_user_account, parent, false);
             }
             UserAccount account = getItem(position);
-            TextView text1 = convertView.findViewById(android.R.id.text1);
-            TextView text2 = convertView.findViewById(android.R.id.text2);
+            TextView textUsername = convertView.findViewById(R.id.account_username);
+            TextView textUserType = convertView.findViewById(R.id.account_usertype);
+            TextView textPasswordChannel = convertView.findViewById(R.id.account_password_channel);
+            TextView textDates = convertView.findViewById(R.id.account_dates);
+            TextView textNote = convertView.findViewById(R.id.account_note);
 
             if (account != null) {
-                String displayName = account.szUsername;
-                if (displayName == null || displayName.trim().isEmpty()) {
-                    displayName = getContext().getString(R.string.anonymous_account);
-                }
-                text1.setText(displayName);
-
-                StringBuilder details = new StringBuilder();
+                String username = (account.szUsername != null && !account.szUsername.trim().isEmpty()) 
+                        ? account.szUsername 
+                        : getContext().getString(R.string.anonymous_account);
                 
-                // User Type
+                String userTypeStr;
                 if ((account.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN) {
-                    details.append(getContext().getString(R.string.user_type_admin));
+                    userTypeStr = getContext().getString(R.string.user_type_admin);
+                } else if ((account.uUserType & UserType.USERTYPE_DEFAULT) == UserType.USERTYPE_DEFAULT) {
+                    userTypeStr = getContext().getString(R.string.user_type_default);
+                } else if (account.uUserType == UserType.USERTYPE_NONE) {
+                    userTypeStr = getContext().getString(R.string.user_type_disabled);
                 } else {
-                    details.append(getContext().getString(R.string.user_type_default));
+                    userTypeStr = getContext().getString(R.string.user_type_unknown);
                 }
 
-                // Last Modified
-                if (account.szLastModified != null && !account.szLastModified.isEmpty()) {
-                    details.append(" | ").append(getContext().getString(R.string.last_modified, account.szLastModified));
-                }
+                String password = (account.szPassword != null) ? account.szPassword : "";
+                String channel = (account.szInitChannel != null) ? account.szInitChannel : "";
+                String modified = formatDateTime(account.szLastModified);
+                String lastLogin = formatDateTime(account.szLastLoginTime);
+                String note = (account.szNote != null) ? account.szNote : "";
 
-                // Note
-                if (account.szNote != null && !account.szNote.isEmpty()) {
-                    details.append("\n").append(account.szNote);
-                } else {
-                     details.append("\n").append(getContext().getString(R.string.no_note));
-                }
+                // Visual presentation (Qt 1:1 format)
+                textUsername.setText(username);
+                textUserType.setText(userTypeStr);
 
-                text2.setText(details.toString());
+                String pwdText = getContext().getString(R.string.account_field_password, password);
+                String chanText = getContext().getString(R.string.account_field_channel, channel);
+                textPasswordChannel.setText(pwdText + " | " + chanText);
+
+                String modText = getContext().getString(R.string.account_field_modified, modified);
+                String logText = getContext().getString(R.string.account_field_lastlogin, lastLogin);
+                textDates.setText(modText + " | " + logText);
+
+                textNote.setVisibility(View.VISIBLE);
+                textNote.setText(getContext().getString(R.string.account_field_note, note));
+
+                // Accessible text (Exact 1:1 with qtTeamTalk Qt::AccessibleTextRole)
+                String accessibleText = String.format("%s: %s, %s: %s, %s: %s, %s: %s, %s: %s, %s: %s, %s: %s",
+                        getContext().getString(R.string.account_col_username), username,
+                        getContext().getString(R.string.account_col_password), password,
+                        getContext().getString(R.string.account_col_usertype), userTypeStr,
+                        getContext().getString(R.string.account_col_note), note,
+                        getContext().getString(R.string.account_col_channel), channel,
+                        getContext().getString(R.string.account_col_modified), modified,
+                        getContext().getString(R.string.account_col_lastlogin), lastLogin);
+
+                convertView.setContentDescription(accessibleText);
             }
             return convertView;
         }
+    }
+
+    private static String formatDateTime(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return "";
+        }
+        String s = raw.trim();
+        String[] patterns = {
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy/MM/dd HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+            "yyyy-MM-dd'T'HH:mm:ssX",
+            "MMM dd yyyy HH:mm:ss"
+        };
+        for (String pattern : patterns) {
+            try {
+                java.text.SimpleDateFormat src = new java.text.SimpleDateFormat(pattern, java.util.Locale.US);
+                java.util.Date date = src.parse(s);
+                if (date != null) {
+                    java.text.SimpleDateFormat dest = new java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.getDefault());
+                    return dest.format(date);
+                }
+            } catch (Exception ignored) {}
+        }
+        return s;
     }
 }

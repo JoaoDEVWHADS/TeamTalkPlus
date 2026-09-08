@@ -978,6 +978,24 @@
     <string name="weblogin_prop_title_reset_web_login_id">Reiniciar o ID BearWare.dk</string>
     <string name="weblogin_prop_title_web_login_id">Id de login BearWare.dk</string>
     <string name="zero_disabled">(0 = desativado)</string>
+    <string name="user_type_admin">Administrador</string>
+    <string name="user_type_default">Usuário Padrão</string>
+    <string name="user_type_disabled">Desativado</string>
+    <string name="user_type_unknown">Desconhecido</string>
+    <string name="account_col_username">Nome de Usuário</string>
+    <string name="account_col_password">Senha</string>
+    <string name="account_col_usertype">Tipo de Usuário</string>
+    <string name="account_col_note">Nota</string>
+    <string name="account_col_channel">Canal</string>
+    <string name="account_col_modified">Modificado</string>
+    <string name="account_col_lastlogin">Último Login</string>
+    <string name="account_field_password">Senha: %1$s</string>
+    <string name="account_field_channel">Canal: %1$s</string>
+    <string name="account_field_modified">Modificado: %1$s</string>
+    <string name="account_field_lastlogin">Último Login: %1$s</string>
+    <string name="account_field_note">Nota: %1$s</string>
+    <string name="last_modified">Última Modificação: %1$s</string>
+    <string name="title_user_type">Tipo de Utilizador:</string>
     <string name="zero_for_no_limit">0 para sem limite</string>
     <string name="zero_for_unlimited">0 para ilimitado</string>
     <string name="pref_header_display">Aparência</string>
