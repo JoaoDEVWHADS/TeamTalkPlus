@@ -8,6 +8,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 
 import dk.bearware.TeamTalkBase;
+import dk.bearware.TeamTalk5;
 import dk.bearware.gui.BuildConfig;
 
 public class AppInfo {
@@ -29,7 +30,12 @@ public class AppInfo {
 
     public static String getDefautlUrlArgs(Context context) {
         String appversion = getVersion(context);
+
+        // AppInfo can be queried before TeamTalkService is created. Ensure the JNI
+        // library is loaded before calling a native TeamTalkBase method.
+        TeamTalk5.loadLibrary();
         String dllversion = TeamTalkBase.getVersion();
+
         return "client=" + APPNAME_SHORT + "&version="
                 + appversion + "&dllversion=" + dllversion + "&os=" + OSTYPE;
     }

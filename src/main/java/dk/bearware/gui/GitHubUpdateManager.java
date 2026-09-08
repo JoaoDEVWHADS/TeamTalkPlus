@@ -123,6 +123,16 @@ public class GitHubUpdateManager {
     }
 
     private int compareVersions(String v1, String v2) {
+        String timestamp1 = normalizeTimestampVersion(v1);
+        String timestamp2 = normalizeTimestampVersion(v2);
+
+        // Both supported release formats are converted to yyyyMMddHHmmss.
+        // This keeps old and new tags comparable with each other.
+        if (timestamp1 != null && timestamp2 != null) {
+            return timestamp1.compareTo(timestamp2);
+        }
+
+        // Preserve the previous generic comparison as a fallback for unexpected tags.
         String[] vals1 = v1.split("\\.");
         String[] vals2 = v2.split("\\.");
         int i = 0;
@@ -138,6 +148,33 @@ public class GitHubUpdateManager {
             }
         }
         return Integer.signum(vals1.length - vals2.length);
+    }
+
+    private String normalizeTimestampVersion(String version) {
+        if (version == null) {
+            return null;
+        }
+
+        String value = version.trim();
+        if (value.startsWith("v")) {
+            value = value.substring(1);
+        }
+
+        // Current/legacy format: yyyyMMdd.HHmmss (example: 20260908.123456)
+        if (value.matches("\\d{8}\\.\\d{6}")) {
+            return value.substring(0, 8) + value.substring(9);
+        }
+
+        // Alternate format previously used: yyyy-MM-dd.HHmm (example: 2026-09-08.1234)
+        if (value.matches("\\d{4}-\\d{2}-\\d{2}\\.\\d{4}")) {
+            return value.substring(0, 4)
+                    + value.substring(5, 7)
+                    + value.substring(8, 10)
+                    + value.substring(11, 15)
+                    + "00";
+        }
+
+        return null;
     }
 
     private void showUpdateDialog(final UpdateInfo updateInfo) {
