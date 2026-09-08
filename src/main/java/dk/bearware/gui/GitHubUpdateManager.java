@@ -129,6 +129,15 @@ public class GitHubUpdateManager {
         // Both supported release formats are converted to yyyyMMddHHmmss.
         // This keeps old and new tags comparable with each other.
         if (timestamp1 != null && timestamp2 != null) {
+            // yyyy-MM-dd.HHmm has minute precision only. If one side is that old
+            // format and both timestamps fall in the same minute, their ordering is
+            // unknowable; treat them as equal rather than incorrectly downgrading or
+            // repeatedly prompting. New pretty versions should use HHmmss.
+            boolean minute1 = isMinutePrecisionVersion(v1);
+            boolean minute2 = isMinutePrecisionVersion(v2);
+            if ((minute1 || minute2) && timestamp1.substring(0, 12).equals(timestamp2.substring(0, 12))) {
+                return 0;
+            }
             return timestamp1.compareTo(timestamp2);
         }
 
@@ -165,6 +174,14 @@ public class GitHubUpdateManager {
             return value.substring(0, 8) + value.substring(9);
         }
 
+        // Pretty format with full precision: yyyy-MM-dd.HHmmss (example: 2026-09-08.123456)
+        if (value.matches("\\d{4}-\\d{2}-\\d{2}\\.\\d{6}")) {
+            return value.substring(0, 4)
+                    + value.substring(5, 7)
+                    + value.substring(8, 10)
+                    + value.substring(11, 17);
+        }
+
         // Alternate format previously used: yyyy-MM-dd.HHmm (example: 2026-09-08.1234)
         if (value.matches("\\d{4}-\\d{2}-\\d{2}\\.\\d{4}")) {
             return value.substring(0, 4)
@@ -175,6 +192,13 @@ public class GitHubUpdateManager {
         }
 
         return null;
+    }
+
+    private boolean isMinutePrecisionVersion(String version) {
+        if (version == null) return false;
+        String value = version.trim();
+        if (value.startsWith("v")) value = value.substring(1);
+        return value.matches("\\d{4}-\\d{2}-\\d{2}\\.\\d{4}");
     }
 
     private void showUpdateDialog(final UpdateInfo updateInfo) {
@@ -235,28 +259,42 @@ public class GitHubUpdateManager {
             try {
                 URL url = new URL(urls[0]);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestProperty("User-Agent", "TeamTalk-Android-Updater");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(30000);
+                connection.setInstanceFollowRedirects(true);
                 connection.connect();
 
-                int fileLength = connection.getContentLength();
-                InputStream input = new BufferedInputStream(connection.getInputStream());
-                
-                File apkFile = new File(context.getExternalCacheDir(), "update.apk");
-                FileOutputStream output = new FileOutputStream(apkFile);
-
-                byte[] data = new byte[4096];
-                long total = 0;
-                int count;
-                while ((count = input.read(data)) != -1) {
-                    total += count;
-                    if (fileLength > 0) {
-                        publishProgress((int) (total * 100 / fileLength));
-                    }
-                    output.write(data, 0, count);
+                int responseCode = connection.getResponseCode();
+                if (responseCode < 200 || responseCode >= 300) {
+                    Log.e(TAG, "Update download failed with HTTP " + responseCode);
+                    connection.disconnect();
+                    return null;
                 }
 
-                output.flush();
-                output.close();
-                input.close();
+                long fileLength = connection.getContentLength();
+                if (fileLength <= 0)
+                    publishProgress(-1);
+
+                File cacheDir = context.getExternalCacheDir();
+                if (cacheDir == null)
+                    cacheDir = context.getCacheDir();
+                File apkFile = new File(cacheDir, "update.apk");
+                try (InputStream input = new BufferedInputStream(connection.getInputStream());
+                     FileOutputStream output = new FileOutputStream(apkFile)) {
+                    byte[] data = new byte[8192];
+                    long total = 0;
+                    int count;
+                    while ((count = input.read(data)) != -1) {
+                        total += count;
+                        if (fileLength > 0)
+                            publishProgress((int) Math.min(100, total * 100 / fileLength));
+                        output.write(data, 0, count);
+                    }
+                    output.flush();
+                } finally {
+                    connection.disconnect();
+                }
 
                 return apkFile;
             } catch (Exception e) {
@@ -267,7 +305,13 @@ public class GitHubUpdateManager {
 
         @Override
         protected void onProgressUpdate(Integer... progress) {
-            progressDialog.setProgress(progress[0]);
+            if (progress[0] < 0) {
+                progressDialog.setIndeterminate(true);
+            } else {
+                if (progressDialog.isIndeterminate())
+                    progressDialog.setIndeterminate(false);
+                progressDialog.setProgress(progress[0]);
+            }
         }
 
         @Override
@@ -355,7 +399,9 @@ public class GitHubUpdateManager {
     }
 
     private void clearCachedUpdateApk() {
-        File apkFile = new File(activity.getExternalCacheDir(), "update.apk");
+        File externalCache = activity.getExternalCacheDir();
+        File cacheDir = externalCache != null ? externalCache : activity.getCacheDir();
+        File apkFile = new File(cacheDir, "update.apk");
         if (apkFile.exists()) {
             if (apkFile.delete()) {
                 Log.d(TAG, "Cached update APK deleted.");

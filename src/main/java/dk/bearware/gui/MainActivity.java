@@ -117,7 +117,14 @@ import java.util.Optional;
 import java.util.Vector;
 
 import dk.bearware.Channel;
+import dk.bearware.ChannelType;
+import dk.bearware.Constants;
 import dk.bearware.ClientFlag;
+import dk.bearware.MediaFilePlaybackConstants;
+import dk.bearware.MediaFilePlayback;
+import dk.bearware.MediaFileInfo;
+import dk.bearware.MediaFileStatus;
+import dk.bearware.VideoCodec;
 import dk.bearware.ClientStatistics;
 import dk.bearware.RemoteFile;
 import dk.bearware.ServerProperties;
@@ -189,6 +196,9 @@ public class MainActivity
     private BroadcastReceiver headsetReceiver;
 
     private int lastPos = -1;
+    private final Map<Integer, Vector<MyTextMessage>> incomingTextMsgMergeBuffer = new HashMap<>();
+    private EditText channelChatInput;
+    private EditText globalChatInput;
     SectionsPagerAdapter mSectionsPagerAdapter;
 
     CustomViewPager mViewPager;
@@ -546,6 +556,13 @@ public class MainActivity
         int flags = getClient().getFlags();
         boolean isStreaming = (flags & ClientFlag.CLIENT_STREAM_AUDIO) == ClientFlag.CLIENT_STREAM_AUDIO
                 || (flags & ClientFlag.CLIENT_STREAM_VIDEO) == ClientFlag.CLIENT_STREAM_VIDEO;
+        MediaFileInfo mediaInfo = getService() != null ? getService().currentMediaFileInfo : null;
+        boolean isPaused = mediaInfo != null && mediaInfo.nStatus == MediaFileStatus.MFS_PAUSED;
+        MenuItem pauseItem = menu.findItem(R.id.action_pause);
+        if (pauseItem != null) {
+            pauseItem.setEnabled(isStreaming).setVisible(isStreaming && inMediaTab);
+            pauseItem.setTitle(isPaused ? R.string.action_resume : R.string.action_pause);
+        }
         if (isStreaming) {
             streamItem.setTitle(R.string.action_stop_stream);
         } else {
@@ -597,6 +614,17 @@ public class MainActivity
                     Intent intent = new Intent(MainActivity.this, StreamMediaActivity.class);
                     startActivity(intent);
                 }
+            }
+        } else if (item.getItemId() == R.id.action_pause) {
+            TeamTalkService service = getService();
+            if (service != null) {
+                MediaFileInfo mediaInfo = service.currentMediaFileInfo;
+                MediaFilePlayback playback = new MediaFilePlayback();
+                VideoCodec videoCodec = new VideoCodec();
+                playback.uOffsetMSec = MediaFilePlaybackConstants.TT_MEDIAPLAYBACK_OFFSET_IGNORE;
+                playback.bPaused = mediaInfo != null && mediaInfo.nStatus == MediaFileStatus.MFS_PLAYING;
+                getClient().updateStreamingMediaFileToChannel(playback, videoCodec);
+                invalidateOptionsMenu();
             }
         } else if (item.getItemId() == R.id.action_edit) {
             {
@@ -1195,22 +1223,26 @@ public class MainActivity
             }
 
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            View v = getCurrentFocus();
-            if (v != null)
-                imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+            View currentFocus = getCurrentFocus();
 
             accessibilityAssistant.setVisiblePage(id);
             invalidateOptionsMenu();
 
-            ListView messageList = null;
-            if (id == CHAT_PAGE)
-                messageList = channelChatListView;
-            else if (id == GLOBAL_PAGE)
-                messageList = globalChatListView;
-            else if (id == EVENT_HISTORY_PAGE)
-                messageList = eventHistoryListView;
-            if (messageList != null)
-                accessibilityAssistant.focusLastListItem(messageList);
+            if (id == CHAT_PAGE || id == GLOBAL_PAGE) {
+                mViewPager.postDelayed(() -> {
+                    EditText messageInput = id == CHAT_PAGE ? channelChatInput : globalChatInput;
+                    if (messageInput != null) {
+                        messageInput.requestFocus();
+                        messageInput.setSelection(messageInput.getText().length());
+                        imm.showSoftInput(messageInput, InputMethodManager.SHOW_IMPLICIT);
+                    }
+                }, 100);
+            } else {
+                if (currentFocus != null)
+                    imm.hideSoftInputFromWindow(currentFocus.getWindowToken(), 0);
+                if (id == EVENT_HISTORY_PAGE && eventHistoryListView != null)
+                    accessibilityAssistant.focusLastListItem(eventHistoryListView);
+            }
 
             if (id == SETTINGS_PAGE) {
                 mTabLayout.setVisibility(View.GONE);
@@ -1485,6 +1517,7 @@ public class MainActivity
             View rootView = inflater.inflate(R.layout.fragment_main_chat, container, false);
             mainActivity.accessibilityAssistant.registerPage(rootView, SectionsPagerAdapter.CHAT_PAGE);
             newmsg = rootView.findViewById(R.id.channel_im_edittext);
+            mainActivity.channelChatInput = newmsg;
             newmsg.setOnEditorActionListener((v, actionId, event) -> {
                 if (actionId == EditorInfo.IME_ACTION_SEND || actionId == EditorInfo.IME_NULL) {
                     sendMsgToChannel();
@@ -1494,9 +1527,8 @@ public class MainActivity
             });
             ListView chatlog = rootView.findViewById(R.id.channel_im_listview);
             mainActivity.channelChatListView = chatlog;
-            chatlog.setTranscriptMode(ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL);
+            chatlog.setTranscriptMode(ListView.TRANSCRIPT_MODE_NORMAL);
             chatlog.setAdapter(mainActivity.channelChatAdapter);
-            mainActivity.accessibilityAssistant.focusLastListItem(chatlog);
 
             Button sendBtn = rootView.findViewById(R.id.channel_im_sendbtn);
             sendBtn.setOnClickListener(arg0 -> sendMsgToChannel());
@@ -1513,13 +1545,17 @@ public class MainActivity
             textmsg.nChannelID = mainActivity.getClient().getMyChannelID();
             textmsg.szMessage = text;
 
-            int cmdid = 0;
+            boolean sent = true;
             for (MyTextMessage m : textmsg.split()) {
-                cmdid = mainActivity.getClient().doTextMessage(m);
+                int cmdid = mainActivity.getClient().doTextMessage(m);
+                if (cmdid <= 0) {
+                    sent = false;
+                    break;
+                }
+                mainActivity.activecmds.put(cmdid, CmdComplete.CMD_COMPLETE_TEXTMSG);
             }
 
-            if (cmdid > 0) {
-                mainActivity.activecmds.put(cmdid, CmdComplete.CMD_COMPLETE_TEXTMSG);
+            if (sent) {
                 MainActivity.playChannelMessageSentSound();
                 newmsg.setText("");
             } else {
@@ -1611,11 +1647,11 @@ public class MainActivity
             if (emptyView != null) {
                 msgList.setEmptyView(emptyView);
             }
-            msgList.setTranscriptMode(ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL);
+            msgList.setTranscriptMode(ListView.TRANSCRIPT_MODE_NORMAL);
             msgList.setAdapter(mainActivity.globalChatAdapter);
-            mainActivity.accessibilityAssistant.focusLastListItem(msgList);
 
             editMsg = rootView.findViewById(R.id.global_msg_edittext);
+            mainActivity.globalChatInput = editMsg;
             Button sendBtn = rootView.findViewById(R.id.global_msg_sendbtn);
 
             sendBtn.setOnClickListener(v -> sendBroadcastMessage());
@@ -1639,8 +1675,18 @@ public class MainActivity
                 textmsg.nChannelID = 0;
                 textmsg.szMessage = msg;
 
+                boolean sent = true;
                 for (MyTextMessage m : textmsg.split()) {
-                    mainActivity.getClient().doTextMessage(m);
+                    int cmdid = mainActivity.getClient().doTextMessage(m);
+                    if (cmdid <= 0) {
+                        sent = false;
+                        break;
+                    }
+                    mainActivity.activecmds.put(cmdid, CmdComplete.CMD_COMPLETE_TEXTMSG);
+                }
+                if (!sent) {
+                    Toast.makeText(mainActivity, R.string.err_send_text_message, Toast.LENGTH_LONG).show();
+                    return;
                 }
                 editMsg.setText("");
                 if (mainActivity.prefs.get("broadcast_message_audio_icon", true))
@@ -2616,6 +2662,22 @@ public class MainActivity
         builder.show();
     }
 
+    private void addClassroomEveryoneAction(androidx.appcompat.widget.PopupMenu popup, Channel channel,
+            User everyone, int streamType, int allowRes, int disallowRes) {
+        boolean allowed = Utils.isTransmitAllowed(everyone, channel, streamType);
+        int titleRes = allowed ? disallowRes : allowRes;
+        popup.getMenu().add(titleRes).setOnMenuItemClickListener(item -> handleChannelAction(titleRes, channel));
+    }
+
+    private boolean toggleClassroomEveryone(Channel channel, int streamType) {
+        if (channel == null || (channel.uChannelType & ChannelType.CHANNEL_CLASSROOM) == 0) return false;
+        User everyone = new User();
+        everyone.nUserID = Constants.TT_CLASSROOM_FREEFORALL;
+        boolean allowed = Utils.isTransmitAllowed(everyone, channel, streamType);
+        Utils.toggleTransmitUsers(everyone, channel, streamType, !allowed);
+        return getClient().doUpdateChannel(channel) > 0;
+    }
+
     public boolean handleChannelAction(int resId, Channel channel) {
         if (channel == null)
             return false;
@@ -2651,6 +2713,16 @@ public class MainActivity
             }
             userIDS.clear();
             return true;
+        } else if (resId == R.string.action_allowvoice || resId == R.string.action_disallowvoice) {
+            return toggleClassroomEveryone(channel, StreamType.STREAMTYPE_VOICE);
+        } else if (resId == R.string.action_allowvideo || resId == R.string.action_disallowvideo) {
+            return toggleClassroomEveryone(channel, StreamType.STREAMTYPE_VIDEOCAPTURE);
+        } else if (resId == R.string.action_allowdesktop || resId == R.string.action_disallowdesktop) {
+            return toggleClassroomEveryone(channel, StreamType.STREAMTYPE_DESKTOP);
+        } else if (resId == R.string.action_allowmedia || resId == R.string.action_disallowmedia) {
+            return toggleClassroomEveryone(channel, StreamType.STREAMTYPE_MEDIAFILE);
+        } else if (resId == R.string.action_allowchanmsg || resId == R.string.action_disallowchanmsg) {
+            return toggleClassroomEveryone(channel, StreamType.STREAMTYPE_CHANNELMSG);
         } else if (resId == R.string.action_banned_users) {
             Intent intent = new Intent(MainActivity.this, dk.bearware.gui.ChannelBannedUsersActivity.class);
             intent.putExtra("channel_id", channel.nChannelID);
@@ -2853,6 +2925,22 @@ public class MainActivity
             // Add Banned Users option
             boolean banRight = (myuseraccount.uUserRights & UserRight.USERRIGHT_BAN_USERS) != UserRight.USERRIGHT_NONE;
             boolean operatorRight = getClient().isChannelOperator(getClient().getMyUserID(), channel.nChannelID);
+            boolean isClassroom = (channel.uChannelType & ChannelType.CHANNEL_CLASSROOM) != 0;
+
+            if (isClassroom && (chanRight || operatorRight)) {
+                User everyone = new User();
+                everyone.nUserID = Constants.TT_CLASSROOM_FREEFORALL;
+                addClassroomEveryoneAction(popup, channel, everyone, StreamType.STREAMTYPE_VOICE,
+                        R.string.action_allowvoice, R.string.action_disallowvoice);
+                addClassroomEveryoneAction(popup, channel, everyone, StreamType.STREAMTYPE_VIDEOCAPTURE,
+                        R.string.action_allowvideo, R.string.action_disallowvideo);
+                addClassroomEveryoneAction(popup, channel, everyone, StreamType.STREAMTYPE_DESKTOP,
+                        R.string.action_allowdesktop, R.string.action_disallowdesktop);
+                addClassroomEveryoneAction(popup, channel, everyone, StreamType.STREAMTYPE_MEDIAFILE,
+                        R.string.action_allowmedia, R.string.action_disallowmedia);
+                addClassroomEveryoneAction(popup, channel, everyone, StreamType.STREAMTYPE_CHANNELMSG,
+                        R.string.action_allowchanmsg, R.string.action_disallowchanmsg);
+            }
 
             if (banRight || operatorRight) {
                 popup.getMenu().add(R.string.action_banned_users).setOnMenuItemClickListener(
@@ -3654,6 +3742,12 @@ public class MainActivity
 
     @Override
     public void onCmdUserTextMessage(TextMessage textmessage) {
+        MyTextMessage completeMsg = MyTextMessage.mergeMessage(
+                incomingTextMsgMergeBuffer, new MyTextMessage(textmessage, ""));
+        if (completeMsg == null)
+            return;
+        textmessage = completeMsg;
+
         accessibilityAssistant.lockEvents();
 
         if (textmessage.nMsgType == TextMsgType.MSGTYPE_USER && textmessage.nFromUserID != getClient().getMyUserID()) {
@@ -3947,6 +4041,7 @@ public class MainActivity
         } else if (item instanceof Channel) {
             handleChannelAction(actionId, (Channel) item);
         } else if (item instanceof MyTextMessage) {
+            MyTextMessage msg = (MyTextMessage) item;
             if (actionId == R.string.action_reply) {
                 mViewPager.setCurrentItem(2); // Chat tab
                 EditText send_msg = findViewById(R.id.channel_im_edittext);
@@ -3955,6 +4050,22 @@ public class MainActivity
                     InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
                     imm.showSoftInput(send_msg, InputMethodManager.SHOW_IMPLICIT);
                 }
+            } else if (actionId == R.string.action_copyname) {
+                textmsgAdapter.copyMessageName(this, msg);
+            } else if (actionId == R.string.action_copymessage) {
+                textmsgAdapter.copyMessageContent(this, msg);
+            } else if (actionId == R.string.action_deletemessage) {
+                textmsgAdapter.deleteMessage(msg);
+                refreshAllMessageAdapters();
+            } else if (actionId == R.string.action_clear) {
+                if (msg.nMsgType == TextMsgType.MSGTYPE_CHANNEL) {
+                    channelChatAdapter.clearMessages();
+                } else if (msg.nMsgType == TextMsgType.MSGTYPE_BROADCAST) {
+                    globalChatAdapter.clearMessages();
+                } else {
+                    textmsgAdapter.clearMessages();
+                }
+                refreshAllMessageAdapters();
             }
         }
     }
@@ -4042,13 +4153,49 @@ public class MainActivity
                 actions.add(new AccessibilityActionCompat(R.string.action_banned_users,
                         getString(R.string.action_banned_users)));
             }
+
+            boolean isClassroom = (channel.uChannelType & ChannelType.CHANNEL_CLASSROOM) != 0;
+            if (isClassroom && (chanRight || operatorRight)) {
+                User everyone = new User();
+                everyone.nUserID = Constants.TT_CLASSROOM_FREEFORALL;
+                addClassroomAccessibilityAction(actions, channel, everyone, StreamType.STREAMTYPE_VOICE,
+                        R.string.action_allowvoice, R.string.action_disallowvoice);
+                addClassroomAccessibilityAction(actions, channel, everyone, StreamType.STREAMTYPE_VIDEOCAPTURE,
+                        R.string.action_allowvideo, R.string.action_disallowvideo);
+                addClassroomAccessibilityAction(actions, channel, everyone, StreamType.STREAMTYPE_DESKTOP,
+                        R.string.action_allowdesktop, R.string.action_disallowdesktop);
+                addClassroomAccessibilityAction(actions, channel, everyone, StreamType.STREAMTYPE_MEDIAFILE,
+                        R.string.action_allowmedia, R.string.action_disallowmedia);
+                addClassroomAccessibilityAction(actions, channel, everyone, StreamType.STREAMTYPE_CHANNELMSG,
+                        R.string.action_allowchanmsg, R.string.action_disallowchanmsg);
+            }
         } else if (item instanceof MyTextMessage) {
             MyTextMessage msg = (MyTextMessage) item;
             if (msg.nFromUserID != getClient().getMyUserID() && msg.nMsgType != TextMsgType.MSGTYPE_BROADCAST) {
                 actions.add(new AccessibilityActionCompat(R.string.action_reply, getString(R.string.action_reply)));
             }
+            if (msg.nMsgType == TextMsgType.MSGTYPE_CHANNEL || msg.nMsgType == TextMsgType.MSGTYPE_BROADCAST || msg.nMsgType == TextMsgType.MSGTYPE_USER) {
+                actions.add(new AccessibilityActionCompat(R.string.action_copyname, getString(R.string.action_copyname)));
+                actions.add(new AccessibilityActionCompat(R.string.action_copymessage, getString(R.string.action_copymessage)));
+                actions.add(new AccessibilityActionCompat(R.string.action_deletemessage, getString(R.string.action_deletemessage)));
+                actions.add(new AccessibilityActionCompat(R.string.action_clear, getString(R.string.action_clear)));
+            }
         }
         return actions;
+    }
+
+    private void addClassroomAccessibilityAction(List<AccessibilityActionCompat> actions, Channel channel,
+            User everyone, int streamType, int allowRes, int disallowRes) {
+        boolean allowed = Utils.isTransmitAllowed(everyone, channel, streamType);
+        int actionRes = allowed ? disallowRes : allowRes;
+        actions.add(new AccessibilityActionCompat(actionRes, getString(actionRes)));
+    }
+
+    private void refreshAllMessageAdapters() {
+        if (textmsgAdapter != null) textmsgAdapter.notifyDataSetChanged();
+        if (channelChatAdapter != null) channelChatAdapter.notifyDataSetChanged();
+        if (globalChatAdapter != null) globalChatAdapter.notifyDataSetChanged();
+        if (eventHistoryAdapter != null) eventHistoryAdapter.notifyDataSetChanged();
     }
 
     private void showSubscriptionsDialog(User user) {

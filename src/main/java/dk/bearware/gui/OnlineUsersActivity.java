@@ -36,6 +36,7 @@ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
 
 import dk.bearware.ClientEvent;
+import dk.bearware.ClientErrorMsg;
 import dk.bearware.Channel;
 import dk.bearware.User;
 import dk.bearware.ClientFlag;
@@ -55,7 +56,9 @@ public class OnlineUsersActivity extends AppCompatActivity implements
         ClientEventListener.OnCmdUserLoggedOutListener,
         ClientEventListener.OnCmdUserJoinedChannelListener,
         ClientEventListener.OnCmdUserLeftChannelListener,
-        ClientEventListener.OnCmdUserUpdateListener, TeamTalkConnectionListener,
+        ClientEventListener.OnCmdUserUpdateListener,
+        ClientEventListener.OnCmdSuccessListener,
+        ClientEventListener.OnCmdErrorListener, TeamTalkConnectionListener,
         AccessibilityAssistant.OnAccessibilityActionClickListener {
 
     private static final String TAG = "OnlineUsersActivity";
@@ -65,6 +68,7 @@ public class OnlineUsersActivity extends AppCompatActivity implements
     private OnlineUsersAdapter adapter;
     private AccessibilityAssistant accessibilityAssistant;
     private final ArrayList<User> onlineUsers = new ArrayList<>();
+    private final java.util.Map<Integer, Runnable> pendingAdminCommands = new java.util.HashMap<>();
 
     TeamTalkService getService() {
         return mConnection.getService();
@@ -95,7 +99,8 @@ public class OnlineUsersActivity extends AppCompatActivity implements
         onlineUsersList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                User selectedUser = onlineUsers.get(position);
+                User selectedUser = adapter.getItem(position);
+                if (selectedUser == null) return;
                 Intent intent = new Intent(OnlineUsersActivity.this, UserPropActivity.class);
                 intent.putExtra(UserPropActivity.EXTRA_USERID, selectedUser.nUserID);
                 startActivity(intent);
@@ -105,7 +110,8 @@ public class OnlineUsersActivity extends AppCompatActivity implements
         onlineUsersList.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
             @Override
             public boolean onItemLongClick(AdapterView<?> parent, View v, int position, long id) {
-                User selectedUser = onlineUsers.get(position);
+                User selectedUser = adapter.getItem(position);
+                if (selectedUser == null) return false;
                 showUserOptions(v, selectedUser);
                 return true;
             }
@@ -188,16 +194,16 @@ public class OnlineUsersActivity extends AppCompatActivity implements
             return true;
         } else if (itemId == R.id.action_kickchan) {
             confirmAction(alert, R.string.kick_confirmation, selectedUser,
-            () -> getClient().doKickUser(selectedUser.nUserID, selectedUser.nChannelID));
+            () -> queueAdminCommand(getClient().doKickUser(selectedUser.nUserID, selectedUser.nChannelID), null));
             return true;
         } else if (itemId == R.id.action_kicksrv) {
             confirmAction(alert, R.string.kick_confirmation, selectedUser,
-            () -> getClient().doKickUser(selectedUser.nUserID, 0));
+            () -> queueAdminCommand(getClient().doKickUser(selectedUser.nUserID, 0), null));
             return true;
         } else if (itemId == R.id.action_makeop) {
             boolean isOp = getClient().isChannelOperator(selectedUser.nUserID, selectedUser.nChannelID);
             if ((myuseraccount.uUserRights & UserRight.USERRIGHT_OPERATOR_ENABLE) != UserRight.USERRIGHT_NONE) {
-                getClient().doChannelOp(selectedUser.nUserID, selectedUser.nChannelID, !isOp);
+                queueAdminCommand(getClient().doChannelOp(selectedUser.nUserID, selectedUser.nChannelID, !isOp), null);
                 return true;
             }
             alert.setTitle(!isOp ? R.string.action_revoke_operator : R.string.action_make_operator);
@@ -205,7 +211,7 @@ public class OnlineUsersActivity extends AppCompatActivity implements
             final EditText input = new EditText(OnlineUsersActivity.this);
             input.setInputType(InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_CLASS_TEXT);
             alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) ->
-            getClient().doChannelOpEx(selectedUser.nUserID, selectedUser.nChannelID, input.getText().toString(), !isOp));
+            queueAdminCommand(getClient().doChannelOpEx(selectedUser.nUserID, selectedUser.nChannelID, input.getText().toString(), !isOp), null));
             alert.setNegativeButton(android.R.string.no, null);
             alert.setView(input);
             alert.show();
@@ -222,8 +228,17 @@ public class OnlineUsersActivity extends AppCompatActivity implements
     }
 
     private void banAndKick(User user, int channelId) {
-        getClient().doBanUser(user.nUserID, channelId);
-        getClient().doKickUser(user.nUserID, channelId);
+        int banCmdId = getClient().doBanUser(user.nUserID, channelId);
+        queueAdminCommand(banCmdId, () ->
+                queueAdminCommand(getClient().doKickUser(user.nUserID, channelId), null));
+    }
+
+    private void queueAdminCommand(int cmdId, Runnable onSuccess) {
+        if (cmdId <= 0) {
+            Toast.makeText(this, R.string.text_con_cmderr, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        pendingAdminCommands.put(cmdId, onSuccess);
     }
 
     private void registerEventListeners() {
@@ -232,6 +247,8 @@ public class OnlineUsersActivity extends AppCompatActivity implements
         getService().getEventHandler().registerOnCmdUserJoinedChannel(this, true);
         getService().getEventHandler().registerOnCmdUserLeftChannel(this, true);
         getService().getEventHandler().registerOnCmdUserUpdate(this, true);
+        getService().getEventHandler().registerOnCmdSuccess(this, true);
+        getService().getEventHandler().registerOnCmdError(this, true);
     }
 
     private void populateUserList() {
@@ -358,20 +375,36 @@ public class OnlineUsersActivity extends AppCompatActivity implements
             intent.putExtra(TextMessageActivity.EXTRA_USERID, user.nUserID);
             startActivity(intent);
         } else if (actionId == R.id.action_kicksrv) {
-            ttclient.doKickUser(user.nUserID, 0);
+            queueAdminCommand(ttclient.doKickUser(user.nUserID, 0), null);
         } else if (actionId == R.id.action_bansrv) {
-            ttclient.doBanUser(user.nUserID, 0);
+            banAndKick(user, 0);
         } else if (actionId == R.id.action_kickchan) {
-            ttclient.doKickUser(user.nUserID, user.nChannelID);
+            queueAdminCommand(ttclient.doKickUser(user.nUserID, user.nChannelID), null);
         } else if (actionId == R.id.action_banchan) {
-            ttclient.doBanUser(user.nUserID, user.nChannelID);
+            banAndKick(user, user.nChannelID);
         } else if (actionId == R.string.info_copy_name) {
             Utils.copyToClipboard(this, getString(R.string.info_copy_name), user.szNickname);
         }
     }
 
+
+    @Override
+    public void onCmdSuccess(int cmdId) {
+        if (!pendingAdminCommands.containsKey(cmdId)) return;
+        Runnable onSuccess = pendingAdminCommands.remove(cmdId);
+        if (onSuccess != null) onSuccess.run();
+    }
+
+    @Override
+    public void onCmdError(int cmdId, ClientErrorMsg errmsg) {
+        if (!pendingAdminCommands.containsKey(cmdId)) return;
+        pendingAdminCommands.remove(cmdId);
+        Utils.notifyError(this, errmsg);
+    }
+
     @Override
     public void onServiceConnected(TeamTalkService service) {
+        adapter.setService(service);
         registerEventListeners();
         populateUserList();
     }

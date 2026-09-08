@@ -23,7 +23,7 @@ import dk.bearware.backend.TeamTalkService;
 
 public class OnlineUsersAdapter extends ArrayAdapter<User> {
     private final LayoutInflater inflater;
-    private final TeamTalkService service;
+    private TeamTalkService service;
     private final AccessibilityAssistant accessibilityAssistant;
 
     public OnlineUsersAdapter(Context context, TeamTalkService service, List<User> users, AccessibilityAssistant accessibilityAssistant) {
@@ -32,6 +32,11 @@ public class OnlineUsersAdapter extends ArrayAdapter<User> {
         this.accessibilityAssistant = accessibilityAssistant;
         inflater = LayoutInflater.from(context);
         updateUsers(users);
+    }
+
+    public void setService(TeamTalkService service) {
+        this.service = service;
+        notifyDataSetChanged();
     }
 
     public void updateUsers(List<User> newUsers) {
@@ -137,7 +142,8 @@ public class OnlineUsersAdapter extends ArrayAdapter<User> {
 
         User user = getItem(position);
         if (user != null) {
-            boolean isOperator = service.getTTInstance().isChannelOperator(user.nUserID, user.nChannelID);
+            boolean isOperator = service != null && service.getTTInstance() != null
+                    && service.getTTInstance().isChannelOperator(user.nUserID, user.nChannelID);
             String nickname = dk.bearware.gui.Utils.getDisplayName(getContext(), user);
             if (isOperator) nickname += " (Op)";
             String status = (user.szStatusMsg != null) ? user.szStatusMsg : "";

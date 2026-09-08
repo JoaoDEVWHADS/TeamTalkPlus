@@ -67,6 +67,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.Executors;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -121,6 +122,7 @@ import static dk.bearware.gui.CmdComplete.CMD_COMPLETE_NONE;
 
 public class TeamTalkService extends Service implements
         BluetoothHeadsetHelper.HeadsetConnectionListener,
+        BluetoothHeadsetHelper.ScoAudioConnectionListener,
         ClientEventListener.OnConnectSuccessListener,
         ClientEventListener.OnConnectFailedListener,
         ClientEventListener.OnConnectionLostListener,
@@ -159,6 +161,7 @@ public class TeamTalkService extends Service implements
 
     private static final int UI_WIDGET_ID = 1;
     private static final String UI_CHANNEL_ID = "TeamtalkConnection";
+    private static final long BLUETOOTH_SCO_RECONNECT_DELAY_MS = 500;
 
     public static final int TAG_NOTIFICATION_TRANSFER = 2;
     private dk.bearware.data.TTSWrapper ttsWrapper;
@@ -180,9 +183,11 @@ public class TeamTalkService extends Service implements
     private MediaSessionCompat mediaSession;
     Handler reconnectHandler = new Handler();
     Runnable reconnectTimer = this::reconnect;
+    private Runnable reconnectBluetoothScoAfterCall;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
     private java.util.concurrent.ExecutorService connectionExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final AtomicLong connectionGeneration = new AtomicLong();
     private PowerManager.WakeLock wakeLock;
     private AudioManager audioManager;
 
@@ -196,10 +201,12 @@ public class TeamTalkService extends Service implements
 
     Map<Integer, Channel> channels = new HashMap<>();
     Map<Integer, RemoteFile> remoteFiles = new HashMap<>();
+    public MediaFileInfo currentMediaFileInfo = new MediaFileInfo();
     Map<Integer, FileTransfer> fileTransfers = new HashMap<>();
     Map<Integer, User> users = new HashMap<>();
     Map<Integer, Vector<MyTextMessage>> usertxtmsgs = new HashMap<>();
     Vector<MyTextMessage> chatlogtxtmsgs = new Vector<>();
+    private final Map<Integer, Vector<MyTextMessage>> incomingTextMsgMergeBuffer = new HashMap<>();
     Map<String, UserCached> usercache = new HashMap<>();
 
     private SoundPool audioIcons;
@@ -429,6 +436,7 @@ public class TeamTalkService extends Service implements
     public void resetState(boolean clearReconnect) {
         if (clearReconnect) {
             reconnectHandler.removeCallbacks(reconnectTimer);
+            connectionGeneration.incrementAndGet();
             ttserver = null;
         }
         disablePhoneCallReaction();
@@ -448,6 +456,7 @@ public class TeamTalkService extends Service implements
         users.clear();
         usertxtmsgs.clear();
         chatlogtxtmsgs.clear();
+        incomingTextMsgMergeBuffer.clear();
         currentServerName = "";
         lastJoinedChannelID = -1;
         myUserID = 0;
@@ -608,6 +617,7 @@ public class TeamTalkService extends Service implements
         createEventTimer();
 
         bluetoothHeadsetHelper = new BluetoothHeadsetHelper(this);
+        reconnectBluetoothScoAfterCall = this::reconnectBluetoothScoAfterCallRun;
 
         ComponentName receiver = new ComponentName(getPackageName(), MediaButtonEventReceiver.class.getName());
 
@@ -794,8 +804,11 @@ public class TeamTalkService extends Service implements
     }
 
     private String getNotificationText() {
-        return (mychannel != null) ? String.format("%s / %s", ttserver.servername, mychannel.szName)
-                : ttserver.servername;
+        ServerEntry server = ttserver;
+        if (server == null)
+            return getString(R.string.app_name);
+        return (mychannel != null) ? String.format("%s / %s", server.servername, mychannel.szName)
+                : server.servername;
     }
 
     @SuppressLint("NewApi")
@@ -851,13 +864,80 @@ public class TeamTalkService extends Service implements
         }
     }
 
+    private final PhoneStateListener phoneStateListener = new PhoneStateListener() {
+        int myStatus = 0;
+
+        @Override
+        public void onCallStateChanged(int state, String incomingNumber) {
+            if (ttclient == null)
+                return;
+            User myself = users.get(ttclient.getMyUserID());
+            if (myself == null)
+                return;
+
+            switch (state) {
+                case TelephonyManager.CALL_STATE_IDLE:
+                    if (inPhoneCall) {
+                        if (voxSuspended)
+                            enableVoiceActivation(true);
+                        else if (txSuspended)
+                            enableVoiceTransmission(true);
+                        setMute(permanentMuteState);
+                        if ((myStatus & TeamTalkConstants.STATUSMODE_AWAY) == 0)
+                            ttclient.doChangeStatus(myself.nStatusMode & ~TeamTalkConstants.STATUSMODE_AWAY, myself.szStatusMsg);
+                        inPhoneCall = false;
+                        scheduleReconnectBluetoothScoAfterCall();
+                    }
+                    break;
+                case TelephonyManager.CALL_STATE_RINGING:
+                case TelephonyManager.CALL_STATE_OFFHOOK:
+                    if (!inPhoneCall) {
+                        inPhoneCall = true;
+                        if (!isMute()) {
+                            ttclient.setSoundOutputMute(true);
+                            currentMuteState = true;
+                        }
+                        if (isVoiceActivationEnabled()) {
+                            voxSuspended = true;
+                            enableVoiceActivation(false);
+                        } else if (isVoiceTransmissionEnabled()) {
+                            txSuspended = true;
+                            enableVoiceTransmission(false);
+                        }
+                        myStatus = myself.nStatusMode;
+                        if ((myStatus & TeamTalkConstants.STATUSMODE_AWAY) == 0)
+                            ttclient.doChangeStatus(myStatus | TeamTalkConstants.STATUSMODE_AWAY, myself.szStatusMsg);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
+
     public void enablePhoneCallReaction() {
         txSuspended = false;
         voxSuspended = false;
         inPhoneCall = false;
+        if (!listeningPhoneStateChanges && telephonyManager != null) {
+            try {
+                telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+                listeningPhoneStateChanges = true;
+            } catch (SecurityException e) {
+                Log.w(TAG, "READ_PHONE_STATE permission not available", e);
+            }
+        }
     }
 
     public void disablePhoneCallReaction() {
+        if (listeningPhoneStateChanges && telephonyManager != null) {
+            try {
+                telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE);
+            } catch (SecurityException e) {
+                Log.w(TAG, "Unable to unregister phone state listener", e);
+            }
+            listeningPhoneStateChanges = false;
+        }
         txSuspended = false;
         voxSuspended = false;
         inPhoneCall = false;
@@ -872,12 +952,67 @@ public class TeamTalkService extends Service implements
             if (bluetoothHeadsetHelper.isHeadsetConnected())
                 bluetoothHeadsetHelper.scoAudioConnect();
             bluetoothHeadsetHelper.registerHeadsetConnectionListener(this);
+            bluetoothHeadsetHelper.registerScoAudioConnectionListener(this);
         }
     }
 
     public void unwatchBluetoothHeadset() {
+        if (reconnectBluetoothScoAfterCall != null)
+            reconnectHandler.removeCallbacks(reconnectBluetoothScoAfterCall);
+        bluetoothHeadsetHelper.unregisterScoAudioConnectionListener(this);
         bluetoothHeadsetHelper.unregisterHeadsetConnectionListener(this);
         bluetoothHeadsetHelper.stop();
+    }
+
+    private void scheduleReconnectBluetoothScoAfterCall() {
+        if (reconnectBluetoothScoAfterCall == null)
+            return;
+        reconnectHandler.removeCallbacks(reconnectBluetoothScoAfterCall);
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        if (!prefs.getBoolean(Preferences.PREF_SOUNDSYSTEM_BLUETOOTH_HEADSET, false))
+            return;
+        if (bluetoothHeadsetHelper == null || !bluetoothHeadsetHelper.isStarted())
+            return;
+        reconnectHandler.postDelayed(reconnectBluetoothScoAfterCall, BLUETOOTH_SCO_RECONNECT_DELAY_MS);
+    }
+
+    private void reconnectBluetoothScoAfterCallRun() {
+        if (bluetoothHeadsetHelper == null || !bluetoothHeadsetHelper.isStarted())
+            return;
+        if (bluetoothHeadsetHelper.isHeadsetConnected() && !bluetoothHeadsetHelper.isOnHeadsetSco())
+            bluetoothHeadsetHelper.scoAudioConnect();
+    }
+
+    private int getPreferredSoundInputDeviceId() {
+        return shouldUseBluetoothVoiceCom()
+                ? SoundDeviceConstants.TT_SOUNDDEVICE_ID_OPENSLES_VOICECOM
+                : SoundDeviceConstants.TT_SOUNDDEVICE_ID_OPENSLES_DEFAULT;
+    }
+
+    private boolean shouldUseBluetoothVoiceCom() {
+        if (bluetoothHeadsetHelper == null || !bluetoothHeadsetHelper.isStarted())
+            return false;
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        if (!prefs.getBoolean(Preferences.PREF_SOUNDSYSTEM_BLUETOOTH_HEADSET, false))
+            return false;
+        return bluetoothHeadsetHelper.isHeadsetConnected() && bluetoothHeadsetHelper.isOnHeadsetSco();
+    }
+
+    private void reinitSoundInputDevice() {
+        if (ttclient == null)
+            return;
+        boolean tx = (ttclient.getFlags() & ClientFlag.CLIENT_TX_VOICE) != 0;
+        boolean vox = (ttclient.getFlags() & (ClientFlag.CLIENT_SNDINPUT_VOICEACTIVATED | ClientFlag.CLIENT_SNDINPUT_VOICEACTIVE)) != 0;
+        if (!tx && !vox)
+            return;
+        ttclient.closeSoundInputDevice();
+        int indevid = getPreferredSoundInputDeviceId();
+        if (!ttclient.initSoundInputDevice(indevid))
+            return;
+        if (tx)
+            ttclient.enableVoiceTransmission(true);
+        if (vox)
+            ttclient.enableVoiceActivation(true);
     }
 
     private void setMyChannel(Channel chan) {
@@ -899,6 +1034,7 @@ public class TeamTalkService extends Service implements
     }
 
     public void setServerEntry(ServerEntry entry) {
+        connectionGeneration.incrementAndGet();
         ttserver = entry;
     }
 
@@ -958,7 +1094,7 @@ public class TeamTalkService extends Service implements
         if (enable) {
             txSuspended = false;
             voxSuspended = false;
-            int indevid = SoundDeviceConstants.TT_SOUNDDEVICE_ID_OPENSLES_DEFAULT;
+            int indevid = getPreferredSoundInputDeviceId();
 
             if (((ttclient.getFlags() & ClientFlag.CLIENT_SNDINPUT_READY) != 0)
                     || ttclient.initSoundInputDevice(indevid))
@@ -974,7 +1110,7 @@ public class TeamTalkService extends Service implements
         if (enable) {
             txSuspended = false;
             voxSuspended = false;
-            int indevid = SoundDeviceConstants.TT_SOUNDDEVICE_ID_OPENSLES_DEFAULT;
+            int indevid = getPreferredSoundInputDeviceId();
 
             if (((ttclient.getFlags() & ClientFlag.CLIENT_SNDINPUT_READY) != 0)
                     || ttclient.initSoundInputDevice(indevid))
@@ -1012,33 +1148,40 @@ public class TeamTalkService extends Service implements
     }
 
     public boolean reconnect() {
-        if (ttserver == null || ttclient == null)
+        final ServerEntry server = ttserver;
+        final TeamTalkBase client = ttclient;
+        if (server == null || client == null)
             return false;
+        final long generation = connectionGeneration.get();
 
         connectionExecutor.execute(() -> {
-            Log.d(TAG, "Reconnecting to " + ttserver.ipaddr);
+            if (generation != connectionGeneration.get() || ttserver != server) return;
+            Log.d(TAG, "Reconnecting to " + server.ipaddr);
             syncToUserCache();
 
-            ttclient.disconnect();
+            client.disconnect();
+            if (generation != connectionGeneration.get() || ttserver != server) return;
 
-            if (!setupEncryption()) {
-                createReconnectTimer(5000);
+            if (!setupEncryption(server, client)) {
+                if (generation == connectionGeneration.get() && ttserver == server)
+                    createReconnectTimer(5000);
                 return;
             }
 
-            if (!ttclient.connect(ttserver.ipaddr, ttserver.tcpport,
-                    ttserver.udpport, 0, 0, ttserver.encrypted)) {
-                ttclient.disconnect();
-                createReconnectTimer(5000);
-                return;
+            if (generation != connectionGeneration.get() || ttserver != server) return;
+            if (!client.connect(server.ipaddr, server.tcpport,
+                    server.udpport, 0, 0, server.encrypted)) {
+                client.disconnect();
+                if (generation == connectionGeneration.get() && ttserver == server)
+                    createReconnectTimer(5000);
             }
         });
 
         return true;
     }
 
-    private boolean setupEncryption() {
-        if (!this.ttserver.encrypted)
+    private boolean setupEncryption(ServerEntry server, TeamTalkBase client) {
+        if (!server.encrypted)
             return true;
 
         File outputDir = getBaseContext().getCacheDir();
@@ -1049,22 +1192,22 @@ public class TeamTalkService extends Service implements
             try (FileWriter cawriter = new FileWriter(cacertfile);
                     FileWriter certwriter = new FileWriter(clientcertfile);
                     FileWriter keywriter = new FileWriter(clientkeyfile)) {
-                cawriter.write(this.ttserver.cacert);
-                certwriter.write(this.ttserver.clientcert);
-                keywriter.write(this.ttserver.clientcertkey);
+                cawriter.write(server.cacert);
+                certwriter.write(server.clientcert);
+                keywriter.write(server.clientcertkey);
             }
             EncryptionContext context = new EncryptionContext();
-            if (!this.ttserver.cacert.isEmpty())
+            if (!server.cacert.isEmpty())
                 context.szCAFile = cacertfile.getAbsolutePath();
-            if (!this.ttserver.clientcert.isEmpty())
+            if (!server.clientcert.isEmpty())
                 context.szCertificateFile = clientcertfile.getAbsolutePath();
-            if (!this.ttserver.clientcertkey.isEmpty())
+            if (!server.clientcertkey.isEmpty())
                 context.szPrivateKeyFile = clientkeyfile.getAbsolutePath();
-            context.bVerifyPeer = ttserver.verifypeer;
+            context.bVerifyPeer = server.verifypeer;
             if (!context.bVerifyPeer) {
                 context.nVerifyDepth = -1;
             }
-            return ttclient.setEncryptionContext(context);
+            return client.setEncryptionContext(context);
         } catch (IOException e) {
             return false;
         }
@@ -1082,12 +1225,14 @@ public class TeamTalkService extends Service implements
         msgs = usertxtmsgs.get(userid);
         if (msgs.size() > HISTORY_USER_MSG_MAX)
             msgs.remove(0);
+        MyTextMessage.merge(msgs);
         return msgs;
     }
 
     public Vector<MyTextMessage> getChatLogTextMsgs() {
         if (chatlogtxtmsgs.size() > HISTORY_CHATLOG_MSG_MAX)
             chatlogtxtmsgs.remove(0);
+        MyTextMessage.merge(chatlogtxtmsgs);
 
         return chatlogtxtmsgs;
     }
@@ -1129,20 +1274,22 @@ public class TeamTalkService extends Service implements
     }
 
     void createReconnectTimer(long delayMsec) {
-
+        if (ttserver == null || isLoggingOut) return;
         reconnectHandler.removeCallbacks(reconnectTimer);
         reconnectHandler.postDelayed(reconnectTimer, delayMsec);
     }
 
     private void login() {
+        ServerEntry server = ttserver;
+        if (server == null || ttclient == null || isLoggingOut) return;
 
-        String nickname = ttserver.nickname;
+        String nickname = server.nickname;
         if (TextUtils.isEmpty(nickname)) {
             nickname = PreferenceManager.getDefaultSharedPreferences(getApplicationContext())
                     .getString(Preferences.PREF_GENERAL_NICKNAME, "");
         }
 
-        int loginCmdId = ttclient.doLoginEx(nickname, ttserver.username, ttserver.password, AppInfo.APPNAME_SHORT);
+        int loginCmdId = ttclient.doLoginEx(nickname, server.username, server.password, AppInfo.APPNAME_SHORT);
         if (loginCmdId < 0) {
             Toast.makeText(this, localizedContext.getString(R.string.text_cmderr_login),
                     Toast.LENGTH_LONG).show();
@@ -1156,13 +1303,16 @@ public class TeamTalkService extends Service implements
     }
 
     private void loginComplete() {
+        ServerEntry server = ttserver;
+        if (server == null || isLoggingOut || ttclient == null)
+            return;
         if (joinchannel == null) {
 
-            if (ttserver.channel != null && !ttserver.channel.isEmpty()) {
-                int chanid = ttclient.getChannelIDFromPath(ttserver.channel);
+            if (server.channel != null && !server.channel.isEmpty()) {
+                int chanid = ttclient.getChannelIDFromPath(server.channel);
                 joinchannel = getChannels().get(chanid);
                 if (joinchannel != null) {
-                    joinchannel.szPassword = ttserver.chanpasswd;
+                    joinchannel.szPassword = server.chanpasswd;
                 }
             }
 
@@ -1178,7 +1328,7 @@ public class TeamTalkService extends Service implements
             if (joinroot && joinchannel == null) {
                 joinchannel = getChannels().get(ttclient.getRootChannelID());
                 if (joinchannel != null) {
-                    joinchannel.szPassword = ttserver.chanpasswd;
+                    joinchannel.szPassword = server.chanpasswd;
                 }
             }
         }
@@ -1280,11 +1430,14 @@ public class TeamTalkService extends Service implements
 
     @Override
     public void onConnectSuccess() {
+        ServerEntry server = ttserver;
+        if (server == null || isLoggingOut) {
+            if (ttclient != null) ttclient.disconnect();
+            return;
+        }
         isLoggingOut = false;
 
-        assert (ttserver != null);
-
-        if (Utils.isWebLogin(ttserver.username)) {
+        if (Utils.isWebLogin(server.username)) {
             new WebLoginAccessToken().execute();
         } else {
             login();
@@ -1297,8 +1450,10 @@ public class TeamTalkService extends Service implements
 
     @Override
     public void onEncryptionError(int opensslErrorNo, ClientErrorMsg errmsg) {
-        Log.i(TAG, "Encryption error: " + errmsg.szErrorMsg + " connecting to " + ttserver.ipaddr + ":"
-                + ttserver.tcpport);
+        ServerEntry server = ttserver;
+        if (server == null || isLoggingOut) return;
+        Log.i(TAG, "Encryption error: " + errmsg.szErrorMsg + " connecting to " + server.ipaddr + ":"
+                + server.tcpport);
         Toast.makeText(this, localizedContext.getString(R.string.text_con_encryption_error, errmsg.szErrorMsg),
                 Toast.LENGTH_LONG).show();
     }
@@ -1306,7 +1461,9 @@ public class TeamTalkService extends Service implements
     @Override
     public void onConnectFailed() {
 
-        Log.i(TAG, "Failed to connect " + ttserver.ipaddr + ":" + ttserver.tcpport);
+        ServerEntry server = ttserver;
+        if (server == null || isLoggingOut) return;
+        Log.i(TAG, "Failed to connect " + server.ipaddr + ":" + server.tcpport);
 
         Toast.makeText(this, localizedContext.getString(R.string.text_con_failed),
                 Toast.LENGTH_SHORT).show();
@@ -1574,16 +1731,23 @@ public class TeamTalkService extends Service implements
 
     @Override
     public void onCmdUserUpdate(User user) {
+        User olduser = users.get(user.nUserID);
+        if (olduser != null) {
+            Utils.ttsSubscriptionChanged(localizedContext, olduser, user)
+                    .ifPresent(text -> getChatLogTextMsgs().add(
+                            MyTextMessage.createLogMsg(MyTextMessage.MSGTYPE_LOG_INFO, text)));
+        }
         users.put(user.nUserID, user);
     }
 
     @Override
     public void onCmdUserJoinedChannel(User user) {
         users.put(user.nUserID, user);
-        if (ttserver.rememberLastChannel && (user.nUserID == myUserID)) {
-            ttserver.channel = ttclient.getChannelPath(user.nChannelID);
+        ServerEntry server = ttserver;
+        if (server != null && server.rememberLastChannel && (user.nUserID == myUserID)) {
+            server.channel = ttclient.getChannelPath(user.nChannelID);
             if (joinchannel != null && joinchannel.nChannelID == user.nChannelID) {
-                ttserver.chanpasswd = joinchannel.szPassword;
+                server.chanpasswd = joinchannel.szPassword;
             }
             saveServerChannel();
         }
@@ -1637,7 +1801,8 @@ public class TeamTalkService extends Service implements
             if (mychannel != null && mychannel.nChannelID == user.nChannelID) {
                 // User joined MY channel — play sound and announce
                 // Sound and speech already handled above in the mychannel check for users other than me
-            } else if (pref.getBoolean("all_users_channel_movement_checkbox", true)) {
+            } else if (pref.getBoolean("all_users_channel_movement_checkbox", true)
+                    && pref.getBoolean("all_channel_join_checkbox", true)) {
                 // User joined a different channel — TTS only, no sound
                 String name = Utils.getDisplayName(localizedContext, user);
                 Channel chan = getChannels().get(user.nChannelID);
@@ -1698,7 +1863,9 @@ public class TeamTalkService extends Service implements
                     getChatLogTextMsgs().add(msg);
                 }
             }
-        } else if (user.nUserID != myUserID && pref.getBoolean("all_users_channel_movement_checkbox", true)) {
+        } else if (user.nUserID != myUserID
+                && pref.getBoolean("all_users_channel_movement_checkbox", true)
+                && pref.getBoolean("all_channel_leave_checkbox", true)) {
             // User left a DIFFERENT channel — TTS only, no sound
             Channel chan = getChannels().get(channelid);
             String chanName = getChannelDisplayName(chan);
@@ -1726,25 +1893,39 @@ public class TeamTalkService extends Service implements
     }
 
     private void saveServerChannel() {
-        if (ttserver == null) return;
-        
+        ServerEntry server = ttserver;
+        if (server == null) return;
+
         SharedPreferences pref = getSharedPreferences("serverlist", MODE_PRIVATE);
         SharedPreferences.Editor edit = pref.edit();
-        
-        int i = 0;
-        while (true) {
+
+        int count = pref.getInt("server_count", -1);
+        if (count >= 0) {
+            for (int i = 0; i < count; i++) {
+                String ip = pref.getString(i + ServerEntry.KEY_IPADDR, "");
+                int port = pref.getInt(i + ServerEntry.KEY_TCPPORT, 0);
+                if (ip.equals(server.ipaddr) && port == server.tcpport) {
+                    edit.putString(i + ServerEntry.KEY_CHANNEL, server.channel);
+                    edit.putString(i + ServerEntry.KEY_CHANPASSWD, server.chanpasswd);
+                    edit.apply();
+                    return;
+                }
+            }
+            return;
+        }
+
+        for (int i = 0; ; i++) {
+            String name = pref.getString(i + ServerEntry.KEY_SERVERNAME, "");
             String ip = pref.getString(i + ServerEntry.KEY_IPADDR, "");
             int port = pref.getInt(i + ServerEntry.KEY_TCPPORT, 0);
-            
-            if (ip.isEmpty()) break;
-            
-            if (ip.equals(ttserver.ipaddr) && port == ttserver.tcpport) {
-                edit.putString(i + ServerEntry.KEY_CHANNEL, ttserver.channel);
-                edit.putString(i + ServerEntry.KEY_CHANPASSWD, ttserver.chanpasswd);
+            if (name.isEmpty() && ip.isEmpty())
+                break;
+            if (ip.equals(server.ipaddr) && port == server.tcpport) {
+                edit.putString(i + ServerEntry.KEY_CHANNEL, server.channel);
+                edit.putString(i + ServerEntry.KEY_CHANPASSWD, server.chanpasswd);
                 edit.apply();
                 break;
             }
-            i++;
         }
     }
 
@@ -1762,6 +1943,11 @@ public class TeamTalkService extends Service implements
         User user = getUsers().get(textmessage.nFromUserID);
         MyTextMessage newmsg = new MyTextMessage(textmessage,
                 user == null ? "" : Utils.getDisplayName(localizedContext, user));
+        MyTextMessage completeMsg = MyTextMessage.mergeMessage(incomingTextMsgMergeBuffer, newmsg);
+        if (completeMsg == null)
+            return;
+        newmsg = completeMsg;
+        textmessage = completeMsg;
 
         switch (textmessage.nMsgType) {
             case TextMsgType.MSGTYPE_USER: {
@@ -1848,6 +2034,13 @@ public class TeamTalkService extends Service implements
 
     @Override
     public void onCmdChannelUpdate(Channel channel) {
+        Channel oldchannel = channels.get(channel.nChannelID);
+        if (oldchannel != null && mychannel != null && mychannel.nChannelID == channel.nChannelID) {
+            Utils.ttsTransmitUsersToggled(localizedContext, oldchannel, channel, getUsers())
+                    .ifPresent(text -> getChatLogTextMsgs().add(
+                            MyTextMessage.createLogMsg(MyTextMessage.MSGTYPE_LOG_INFO, text)));
+        }
+
         channels.put(channel.nChannelID, channel);
 
         if (mychannel != null && mychannel.nChannelID == channel.nChannelID) {
@@ -1914,6 +2107,7 @@ public class TeamTalkService extends Service implements
 
     @Override
     public void onStreamMediaFile(MediaFileInfo mediafileinfo) {
+        currentMediaFileInfo = mediafileinfo;
         User myself = new User();
         if (!ttclient.getUser(myUserID != 0 ? myUserID : ttclient.getMyUserID(), myself))
             return;
@@ -1964,6 +2158,16 @@ public class TeamTalkService extends Service implements
         bluetoothHeadsetHelper.scoAudioDisconnect();
     }
 
+    @Override
+    public void onScoAudioConnected() {
+        reinitSoundInputDevice();
+    }
+
+    @Override
+    public void onScoAudioDisconnected() {
+        reinitSoundInputDevice();
+    }
+
     class WebLoginAccessToken extends AsyncTask<Void, Void, Void> {
 
         String username = "", token = "", accesstoken = "";
@@ -1986,7 +2190,7 @@ public class TeamTalkService extends Service implements
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
 
-            if (username.length() > 0) {
+            if (username.length() > 0 && ttserver != null && !isLoggingOut) {
                 ttserver.username = this.username;
                 login();
             } else {
@@ -2002,10 +2206,7 @@ public class TeamTalkService extends Service implements
             Log.d(AppInfo.TAG, xml);
 
             try {
-                InputSource src = new InputSource(new StringReader(xml));
-                DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-                DocumentBuilder db = dbf.newDocumentBuilder();
-                Document document = db.parse(src);
+                Document document = Utils.parseXmlDocument(xml);
                 XPathFactory factory = XPathFactory.newInstance();
                 XPath xPath = factory.newXPath();
 
@@ -2019,6 +2220,8 @@ public class TeamTalkService extends Service implements
                 Log.e(AppInfo.TAG, "XML IOException: " + e);
             } catch (SAXException e) {
                 Log.e(AppInfo.TAG, "XML SAXException: " + e);
+            } catch (Exception e) {
+                Log.e(AppInfo.TAG, "XML parse failed: " + e);
             }
 
             return null;

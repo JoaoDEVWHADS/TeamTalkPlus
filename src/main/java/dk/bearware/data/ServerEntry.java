@@ -25,6 +25,10 @@ public class ServerEntry implements java.io.Serializable {
                                KEY_CHANPASSWD = "chanpasswd",
                                KEY_REMEMBER_LAST_CHANNEL = "remember_last_channel",
                                KEY_ENCRYPTED = "encrypted",
+                               KEY_CACERT = "cacert",
+                               KEY_CLIENTCERT = "clientcert",
+                               KEY_CLIENTCERTKEY = "clientcertkey",
+                               KEY_VERIFYPEER = "verifypeer",
                                KEY_MOTD = "motd",
                                KEY_USERCOUNT = "usercount",
                                KEY_COUNTRY = "country",
@@ -46,4 +50,5 @@ public class ServerEntry implements java.io.Serializable {
 
     public int stats_usercount = 0;
     public String stats_motd = "", stats_country = "";
+    public String joincode = "";
 }

@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Vector;
 
 import dk.bearware.AbusePrevention;
+import dk.bearware.ClientErrorMsg;
 import dk.bearware.Channel;
 import dk.bearware.TeamTalkBase;
 import dk.bearware.UserAccount;
@@ -44,16 +45,22 @@ import dk.bearware.IntPtr;
 import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
 import dk.bearware.backend.TeamTalkService;
+import dk.bearware.events.ClientEventListener;
 
-public class UserAccountEditActivity extends AppCompatActivity implements TeamTalkConnectionListener {
+public class UserAccountEditActivity extends AppCompatActivity implements TeamTalkConnectionListener,
+        ClientEventListener.OnCmdSuccessListener, ClientEventListener.OnCmdErrorListener {
 
     public static final String EXTRA_USERNAME = "username";
     public static final String EXTRA_PASSWORD = "password";
     public static final String EXTRA_USERTYPE = "usertype";
     public static final String EXTRA_USERRIGHTS = "userrights";
+    public static final String EXTRA_USER_DATA = "user_data";
     public static final String EXTRA_NOTE = "note";
     public static final String EXTRA_INIT_CHANNEL = "init_channel";
     public static final String EXTRA_OPERATOR_CHANNELS = "operator_channels";
+    public static final String EXTRA_AUDIO_CODEC_BPS_LIMIT = "audio_codec_bps_limit";
+    public static final String EXTRA_ABUSE_COMMANDS_LIMIT = "abuse_commands_limit";
+    public static final String EXTRA_ABUSE_INTERVAL_MSEC = "abuse_interval_msec";
     public static final String EXTRA_IS_EDIT = "is_edit";
     public static final String EXTRA_IS_VIEW = "is_view";
 
@@ -77,6 +84,9 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
     private TeamTalkConnection ttConnection;
     private boolean isEdit = false;
     private boolean isView = false;
+    private String originalUsername = "";
+    private int pendingCreateCmdId = 0;
+    private int pendingDeleteCmdId = 0;
 
 
     @Override
@@ -112,12 +122,19 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
         
         if (isEdit || isView) {
             mAccount.szUsername = getIntent().getStringExtra(EXTRA_USERNAME);
+            originalUsername = mAccount.szUsername != null ? mAccount.szUsername : "";
             mAccount.szPassword = getIntent().getStringExtra(EXTRA_PASSWORD);
             mAccount.uUserType = getIntent().getIntExtra(EXTRA_USERTYPE, UserType.USERTYPE_DEFAULT);
             mAccount.uUserRights = getIntent().getIntExtra(EXTRA_USERRIGHTS, UserRight.USERRIGHT_NONE);
+            mAccount.nUserData = getIntent().getIntExtra(EXTRA_USER_DATA, mAccount.nUserData);
             mAccount.szNote = getIntent().getStringExtra(EXTRA_NOTE);
             mAccount.szInitChannel = getIntent().getStringExtra(EXTRA_INIT_CHANNEL);
             mAccount.autoOperatorChannels = getIntent().getIntArrayExtra(EXTRA_OPERATOR_CHANNELS);
+            mAccount.nAudioCodecBpsLimit = getIntent().getIntExtra(EXTRA_AUDIO_CODEC_BPS_LIMIT, mAccount.nAudioCodecBpsLimit);
+            if (mAccount.abusePrevent == null)
+                mAccount.abusePrevent = new AbusePrevention();
+            mAccount.abusePrevent.nCommandsLimit = getIntent().getIntExtra(EXTRA_ABUSE_COMMANDS_LIMIT, mAccount.abusePrevent.nCommandsLimit);
+            mAccount.abusePrevent.nCommandsIntervalMSec = getIntent().getIntExtra(EXTRA_ABUSE_INTERVAL_MSEC, mAccount.abusePrevent.nCommandsIntervalMSec);
             if (mAccount.autoOperatorChannels == null) {
                 mAccount.autoOperatorChannels = new int[dk.bearware.Constants.TT_CHANNELS_OPERATOR_MAX];
             }
@@ -176,23 +193,45 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
     @Override
     protected void onStart() {
         super.onStart();
-        Intent intent = new Intent(this, TeamTalkService.class);
-        bindService(intent, ttConnection, Context.BIND_AUTO_CREATE);
+        if (!ttConnection.isBound()) {
+            Intent intent = new Intent(this, TeamTalkService.class);
+            bindService(intent, ttConnection, Context.BIND_AUTO_CREATE);
+        }
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        if (ttConnection.isBound()) {
-            unbindService(ttConnection);
+        // Keep the service connection while an account command is pending. A quick
+        // app switch must not make us miss CMD_SUCCESS/CMD_ERROR and leave Save disabled.
+        if (pendingCreateCmdId == 0 && pendingDeleteCmdId == 0) {
+            unbindTeamTalkService();
         }
     }
 
     @Override
-    public void onServiceConnected(TeamTalkService service) {}
+    protected void onDestroy() {
+        unbindTeamTalkService();
+        super.onDestroy();
+    }
+
+    private void unbindTeamTalkService() {
+        if (!ttConnection.isBound()) return;
+        TeamTalkService service = ttConnection.getService();
+        if (service != null) service.getEventHandler().unregisterListener(this);
+        unbindService(ttConnection);
+    }
 
     @Override
-    public void onServiceDisconnected(TeamTalkService service) {}
+    public void onServiceConnected(TeamTalkService service) {
+        service.getEventHandler().registerOnCmdSuccess(this, true);
+        service.getEventHandler().registerOnCmdError(this, true);
+    }
+
+    @Override
+    public void onServiceDisconnected(TeamTalkService service) {
+        service.getEventHandler().unregisterListener(this);
+    }
 
     private void saveAccount() {
         TeamTalkService service = ttConnection.getService();
@@ -207,15 +246,60 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
             }
         }
 
-        
-
-        int cmdId = service.getTTInstance().doNewUserAccount(mAccount);
-        if (cmdId > 0) {
-            Toast.makeText(this, R.string.msg_user_account_request_sent, Toast.LENGTH_SHORT).show();
-            finish();
-        } else {
-            Toast.makeText(this, R.string.err_user_account_request_failed, Toast.LENGTH_SHORT).show();
+        if (mAccount.szUsername == null || mAccount.szUsername.trim().isEmpty()) {
+            Toast.makeText(this, R.string.err_username_required, Toast.LENGTH_SHORT).show();
+            return;
         }
+
+        btnSave.setEnabled(false);
+        pendingCreateCmdId = service.getTTInstance().doNewUserAccount(mAccount);
+        if (pendingCreateCmdId <= 0) {
+            pendingCreateCmdId = 0;
+            btnSave.setEnabled(true);
+            Toast.makeText(this, R.string.err_user_account_request_failed, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Toast.makeText(this, R.string.msg_user_account_request_sent, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onCmdSuccess(int cmdId) {
+        TeamTalkService service = ttConnection != null ? ttConnection.getService() : null;
+        if (cmdId == pendingCreateCmdId) {
+            pendingCreateCmdId = 0;
+            String newUsername = mAccount.szUsername != null ? mAccount.szUsername : "";
+            if (isEdit && !originalUsername.equals(newUsername)) {
+                if (service == null || service.getTTInstance() == null) {
+                    btnSave.setEnabled(true);
+                    Toast.makeText(this, R.string.err_service_not_available, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                // Create the renamed account first. Only delete the old account after
+                // the server confirms creation, so a failed rename cannot lose data.
+                pendingDeleteCmdId = service.getTTInstance().doDeleteUserAccount(originalUsername);
+                if (pendingDeleteCmdId <= 0) {
+                    pendingDeleteCmdId = 0;
+                    btnSave.setEnabled(true);
+                    Toast.makeText(this, R.string.err_user_account_request_failed, Toast.LENGTH_SHORT).show();
+                }
+                return;
+            }
+            setResult(RESULT_OK);
+            finish();
+        } else if (cmdId == pendingDeleteCmdId) {
+            pendingDeleteCmdId = 0;
+            setResult(RESULT_OK);
+            finish();
+        }
+    }
+
+    @Override
+    public void onCmdError(int cmdId, ClientErrorMsg errmsg) {
+        if (cmdId != pendingCreateCmdId && cmdId != pendingDeleteCmdId) return;
+        if (cmdId == pendingCreateCmdId) pendingCreateCmdId = 0;
+        if (cmdId == pendingDeleteCmdId) pendingDeleteCmdId = 0;
+        btnSave.setEnabled(true);
+        Utils.notifyError(this, errmsg);
     }
 
     public interface AccountEditFragment {
@@ -273,7 +357,7 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
             UserAccountEditActivity activity = (UserAccountEditActivity) getActivity();
             if (activity != null) {
                 editUser.setText(activity.mAccount.szUsername);
-                if (activity.isEdit || activity.isView) editUser.setEnabled(false);
+                editUser.setEnabled(!activity.isView);
                 editPass.setText(activity.mAccount.szPassword);
                 editNote.setText(activity.mAccount.szNote);
                 editInitChan.setText(activity.mAccount.szInitChannel);
@@ -485,10 +569,37 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
             if ((r & UserRight.USERRIGHT_ALL) == UserRight.USERRIGHT_ALL) chkAll.setChecked(true);
         }
 
+        private static final int EDITABLE_RIGHTS_MASK =
+                UserRight.USERRIGHT_MULTI_LOGIN |
+                UserRight.USERRIGHT_LOCKED_NICKNAME |
+                UserRight.USERRIGHT_VIEW_ALL_USERS |
+                UserRight.USERRIGHT_VIEW_HIDDEN_CHANNELS |
+                UserRight.USERRIGHT_CREATE_TEMPORARY_CHANNEL |
+                UserRight.USERRIGHT_MODIFY_CHANNELS |
+                UserRight.USERRIGHT_UPDATE_SERVERPROPERTIES |
+                UserRight.USERRIGHT_KICK_USERS |
+                UserRight.USERRIGHT_BAN_USERS |
+                UserRight.USERRIGHT_MOVE_USERS |
+                UserRight.USERRIGHT_OPERATOR_ENABLE |
+                UserRight.USERRIGHT_UPLOAD_FILES |
+                UserRight.USERRIGHT_DOWNLOAD_FILES |
+                UserRight.USERRIGHT_RECORD_VOICE |
+                UserRight.USERRIGHT_TRANSMIT_VOICE |
+                UserRight.USERRIGHT_TRANSMIT_VIDEOCAPTURE |
+                UserRight.USERRIGHT_TRANSMIT_DESKTOP |
+                UserRight.USERRIGHT_TRANSMIT_DESKTOPINPUT |
+                UserRight.USERRIGHT_TRANSMIT_MEDIAFILE_AUDIO |
+                UserRight.USERRIGHT_TRANSMIT_MEDIAFILE_VIDEO |
+                UserRight.USERRIGHT_TEXTMESSAGE_USER |
+                UserRight.USERRIGHT_TEXTMESSAGE_CHANNEL |
+                UserRight.USERRIGHT_TEXTMESSAGE_BROADCAST;
+
         @Override
         public void updateAccount(UserAccount acc) {
             if (chkML == null) return;
-            int r = 0;
+            // Preserve rights not represented by this UI (e.g. LOCKED_STATUS and
+            // future SDK rights), and only replace the bits controlled here.
+            int r = acc.uUserRights & ~EDITABLE_RIGHTS_MASK;
             if (chkML.isChecked()) r |= UserRight.USERRIGHT_MULTI_LOGIN;
             if (!chkCN.isChecked()) r |= UserRight.USERRIGHT_LOCKED_NICKNAME; 
             if (chkVA.isChecked())    r |= UserRight.USERRIGHT_VIEW_ALL_USERS;

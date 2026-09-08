@@ -418,6 +418,8 @@ implements TeamTalkConnectionListener, ClientEventListener.OnCmdErrorListener, C
 
     @Override
     public void onCmdSuccess(int cmdId) {
+        if (updateCmdId != cmdId) return;
+        updateCmdId = 0;
         setResult(RESULT_OK);
         finish();
     }

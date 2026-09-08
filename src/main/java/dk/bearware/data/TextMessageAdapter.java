@@ -2,6 +2,8 @@
 package dk.bearware.data;
 
 import java.util.Vector;
+import java.util.ArrayList;
+import java.util.List;
 import java.text.DateFormat;
 
 import dk.bearware.ServerProperties;
@@ -9,15 +11,23 @@ import dk.bearware.TextMsgType;
 import dk.bearware.gui.AccessibilityAssistant;
 import dk.bearware.gui.R;
 
+import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.TypedArray;
+import android.net.Uri;
 import android.graphics.Color;
+import android.util.Patterns;
 import androidx.core.view.ViewCompat;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.PopupMenu;
 import android.widget.TextView;
+import android.widget.Toast;
 
 public class TextMessageAdapter extends BaseAdapter {
 
@@ -193,6 +203,12 @@ public class TextMessageAdapter extends BaseAdapter {
                 name.setTextColor(text_color);
                 msgdate.setTextColor(text_color);
                 msgtext.setTextColor(text_color);
+
+                convertView.setOnClickListener(null);
+                convertView.setOnLongClickListener(v -> {
+                    showMessageActions(v, txtmsg);
+                    return true;
+                });
                 break;
             }
             case MyTextMessage.MSGTYPE_SERVERPROP : {
@@ -215,6 +231,8 @@ public class TextMessageAdapter extends BaseAdapter {
 
                 logmsg.setTextColor(text_color);
                 logtm.setTextColor(text_color);
+                convertView.setOnClickListener(null);
+                convertView.setOnLongClickListener(null);
                 break;
             }
             case MyTextMessage.MSGTYPE_LOG_ERROR :
@@ -244,6 +262,8 @@ public class TextMessageAdapter extends BaseAdapter {
 
                 logmsg.setTextColor(text_color);
                 logtm.setTextColor(text_color);
+                convertView.setOnClickListener(null);
+                convertView.setOnLongClickListener(null);
                 break;
             }
         }
@@ -273,6 +293,80 @@ public class TextMessageAdapter extends BaseAdapter {
         }
 
         return convertView;
+    }
+
+    public void showMessageActions(View anchor, MyTextMessage msg) {
+        PopupMenu popup = new PopupMenu(anchor.getContext(), anchor);
+        List<String> urls = extractUrls(msg.szMessage);
+        int urlGroup = 0x6A01;
+        for (int i = 0; i < urls.size(); i++) {
+            popup.getMenu().add(urlGroup, i + 1, i, urls.get(i));
+        }
+        popup.getMenuInflater().inflate(R.menu.message_actions, popup.getMenu());
+        popup.setOnMenuItemClickListener(item -> {
+            if (item.getGroupId() == urlGroup) {
+                openUrl(anchor.getContext(), item.getTitle().toString());
+                return true;
+            }
+            if (item.getItemId() == R.id.action_copyname) {
+                copyMessageName(anchor.getContext(), msg);
+                return true;
+            } else if (item.getItemId() == R.id.action_copymessage) {
+                copyMessageContent(anchor.getContext(), msg);
+                return true;
+            } else if (item.getItemId() == R.id.action_deletemessage) {
+                deleteMessage(msg);
+                return true;
+            } else if (item.getItemId() == R.id.action_clear) {
+                clearMessages();
+                return true;
+            }
+            return false;
+        });
+        popup.show();
+    }
+
+    public List<String> extractUrls(String text) {
+        List<String> urls = new ArrayList<>();
+        if (text == null) return urls;
+        java.util.regex.Matcher matcher = Patterns.WEB_URL.matcher(text);
+        while (matcher.find()) urls.add(matcher.group());
+        return urls;
+    }
+
+    public void openUrl(Context context, String url) {
+        if (!url.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) url = "http://" + url;
+        try {
+            context.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(context, R.string.text_no_browser, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public void copyMessageName(Context context, MyTextMessage msg) {
+        copyToClipboard(context, msg.szNickName);
+    }
+
+    public void copyMessageContent(Context context, MyTextMessage msg) {
+        copyToClipboard(context, msg.szMessage);
+    }
+
+    private void copyToClipboard(Context context, String text) {
+        ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("message", text == null ? "" : text));
+    }
+
+    public void deleteMessage(MyTextMessage msg) {
+        messages.remove(msg);
+        copyToMessagesView();
+        notifyDataSetChanged();
+    }
+
+    public void clearMessages() {
+        Vector<MyTextMessage> visibleMessages = getMessages();
+        messages.removeAll(visibleMessages);
+        copyToMessagesView();
+        notifyDataSetChanged();
     }
 
     private void applyFontScale(ViewGroup parent, float scale) {

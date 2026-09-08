@@ -55,6 +55,7 @@ import java.util.Set;
 import java.util.Vector;
 
 import javax.xml.parsers.DocumentBuilder;
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import dk.bearware.backend.TeamTalkService;
@@ -169,6 +170,18 @@ public class Utils {
         if(s == null)
             return def_value;
         return s;
+    }
+
+    public static boolean sameBan(dk.bearware.BannedUser a, dk.bearware.BannedUser b) {
+        if (a == b) return true;
+        if (a == null || b == null) return false;
+        return java.util.Objects.equals(a.szNickname, b.szNickname)
+                && java.util.Objects.equals(a.szUsername, b.szUsername)
+                && java.util.Objects.equals(a.szIPAddress, b.szIPAddress)
+                && java.util.Objects.equals(a.szChannelPath, b.szChannelPath)
+                && java.util.Objects.equals(a.szOwner, b.szOwner)
+                && java.util.Objects.equals(a.szBanTime, b.szBanTime)
+                && a.uBanTypes == b.uBanTypes;
     }
 
     public static Intent putServerEntry(Intent intent, ServerEntry entry) {
@@ -625,17 +638,37 @@ public class Utils {
         return sb.toString();
     }
 
+    private static final int MAX_SERVER_XML_CHARS = 2 * 1024 * 1024;
+
+    public static Document parseXmlDocument(String xml) throws Exception {
+        if (xml == null || xml.length() > MAX_SERVER_XML_CHARS) {
+            throw new IllegalArgumentException("XML document is empty or too large");
+        }
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+        try {
+            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        } catch (IllegalArgumentException ignored) {
+            // Older Android parsers may not expose these JAXP attributes.
+        }
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        return builder.parse(new InputSource(new StringReader(xml)));
+    }
+
     public static Vector<ServerEntry> getXmlServerEntries(String xml) {
         Vector<ServerEntry> servers = new Vector<>();
-        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder dBuilder;
         Document doc;
         try {
-            dBuilder = dbFactory.newDocumentBuilder();
-            doc = dBuilder.parse(new InputSource(new StringReader(xml)));
+            doc = parseXmlDocument(xml);
         }
         catch(Exception e) {
-            Log.e(TAG, "Failed to parse server entries");
+            Log.e(TAG, "Failed to parse server entries", e);
             return servers;
         }
 
@@ -664,6 +697,9 @@ public class Utils {
                 catch(NumberFormatException e) {
                     continue;
                 }
+                NodeList joincodenode = hostelement.getElementsByTagName("joincode");
+                if (joincodenode.getLength() > 0)
+                    entry.joincode = joincodenode.item(0).getTextContent();
                 NodeList listingnode = hostelement.getElementsByTagName("listing");
                 if (listingnode.getLength() > 0) {
                     switch (listingnode.item(0).getTextContent()) {
@@ -793,6 +829,23 @@ public class Utils {
         return servers;
     }
 
+    private static void writeTrustedCertificate(XmlSerializer serializer, ServerEntry server) throws IOException {
+        boolean hasTlsSettings = (server.cacert != null && !server.cacert.isEmpty())
+                || (server.clientcert != null && !server.clientcert.isEmpty())
+                || (server.clientcertkey != null && !server.clientcertkey.isEmpty())
+                || server.verifypeer;
+        if (!hasTlsSettings) return;
+        serializer.startTag(null, "trusted-certificate");
+        if (server.cacert != null && !server.cacert.isEmpty())
+            serializer.startTag(null, "certificate-authority-pem").text(server.cacert).endTag(null, "certificate-authority-pem");
+        if (server.clientcert != null && !server.clientcert.isEmpty())
+            serializer.startTag(null, "client-certificate-pem").text(server.clientcert).endTag(null, "client-certificate-pem");
+        if (server.clientcertkey != null && !server.clientcertkey.isEmpty())
+            serializer.startTag(null, "client-private-key-pem").text(server.clientcertkey).endTag(null, "client-private-key-pem");
+        serializer.startTag(null, "verify-peer").text(String.valueOf(server.verifypeer)).endTag(null, "verify-peer");
+        serializer.endTag(null, "trusted-certificate");
+    }
+
     public static boolean saveServers(Vector<ServerEntry> servers, String path) {
         try {
             FileOutputStream fos = new FileOutputStream(path);
@@ -808,6 +861,7 @@ public class Utils {
                 serializer.startTag(null, "tcpport").text(String.valueOf(server.tcpport)).endTag(null, "tcpport");
                 serializer.startTag(null, "udpport").text(String.valueOf(server.udpport)).endTag(null, "udpport");
                 serializer.startTag(null, "encrypted").text(String.valueOf(server.encrypted)).endTag(null, "encrypted");
+                writeTrustedCertificate(serializer, server);
                 serializer.startTag(null, "auth");
                 serializer.startTag(null, "username").text(server.username).endTag(null, "username");
                 serializer.startTag(null, "password").text(server.password).endTag(null, "password");
@@ -850,6 +904,7 @@ public class Utils {
             serializer.startTag(null, "tcpport").text(String.valueOf(server.tcpport)).endTag(null, "tcpport");
             serializer.startTag(null, "udpport").text(String.valueOf(server.udpport)).endTag(null, "udpport");
             serializer.startTag(null, "encrypted").text(String.valueOf(server.encrypted)).endTag(null, "encrypted");
+            writeTrustedCertificate(serializer, server);
             
             if ((server.username != null && !server.username.isEmpty()) || 
                 (server.password != null && !server.password.isEmpty()) ||
@@ -1178,8 +1233,12 @@ public class Utils {
             }
         });
 
-        builder.setPositiveButton(context.getString(R.string.action_select) + ": " + currentViewName, (dialog, which) -> {
-            listener.onChannelSelected(initialViewId, currentViewName);
+        final int selectableChannelId = initialViewId == 0
+                ? service.getTTInstance().getRootChannelID() : initialViewId;
+        final String selectableChannelName = initialViewId == 0
+                ? context.getString(R.string.init_channel) : currentViewName;
+        builder.setPositiveButton(context.getString(R.string.action_select) + ": " + selectableChannelName, (dialog, which) -> {
+            listener.onChannelSelected(selectableChannelId, selectableChannelName);
         });
 
         builder.setNegativeButton(android.R.string.cancel, null);

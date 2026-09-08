@@ -102,6 +102,18 @@
 
     <CheckBoxPreference
         android:defaultValue="true"
+        android:key="all_channel_join_checkbox"
+        android:summary="@string/pref_summary_all_channel_join"
+        android:title="@string/pref_title_all_channel_join" />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
+        android:key="all_channel_leave_checkbox"
+        android:summary="@string/pref_summary_all_channel_leave"
+        android:title="@string/pref_title_all_channel_leave" />
+
+    <CheckBoxPreference
+        android:defaultValue="true"
         android:key="private_message_checkbox"
         android:summary="@string/pref_summary_private_message"
         android:title="@string/pref_title_private_message" />

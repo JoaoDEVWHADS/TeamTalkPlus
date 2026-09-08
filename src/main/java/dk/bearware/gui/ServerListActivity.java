@@ -37,6 +37,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.text.Editable;
+import android.text.InputType;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -44,6 +45,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.PopupMenu;
@@ -147,6 +150,10 @@ public class ServerListActivity extends AppCompatActivity
 
     private static final String TAG = "bearware";
     private static final String SERVERLIST_NAME = "serverlist";
+    private static final String SERVER_COUNT_KEY = "server_count";
+    private static final String ORIGINAL_SERVER_NAME = "original_server_name";
+    private static final String ORIGINAL_SERVER_IP = "original_server_ip";
+    private static final String ORIGINAL_SERVER_PORT = "original_server_port";
     private static final int REQUEST_EDITSERVER = 1;
     private static final int REQUEST_NEWSERVER = 2;
     private static final int REQUEST_SETTINGS = 100;
@@ -184,7 +191,7 @@ public class ServerListActivity extends AppCompatActivity
         setTitle(R.string.title_activity_server_list);
         executorService = Executors.newFixedThreadPool(2);
 
-        Permissions.requestAll(this);
+        Permissions.requestEssential(this);
         AppInfo.ensureFoldersExist(this);
 
         updateManager = new GitHubUpdateManager(this);
@@ -333,7 +340,8 @@ public class ServerListActivity extends AppCompatActivity
 
         // Removed unsafe saveServers() call that was clearing the list on startup via intent
 
-        Permissions.requestAll(this);
+        // Runtime permissions are requested once from onCreate(). Feature-specific
+        // storage access is requested only when the user invokes that feature.
 
         // Bind to LocalService if not already
         if (!mConnection.isBound()) {
@@ -402,15 +410,23 @@ public class ServerListActivity extends AppCompatActivity
                 if(resultCode == RESULT_OK) {
                     ServerEntry entry = Utils.getServerEntry(data);
                     if(entry != null) {
-                        int pos = data.getIntExtra(POSITION_NAME, -1);
-                        if ((pos >= 0) && (pos < servers.size())) {
-                            servers.removeElementAt(pos);
-                            servers.insertElementAt(entry, pos);
+                        String originalName = data.getStringExtra(ORIGINAL_SERVER_NAME);
+                        String originalIp = data.getStringExtra(ORIGINAL_SERVER_IP);
+                        int originalPort = data.getIntExtra(ORIGINAL_SERVER_PORT, -1);
+                        synchronized (servers) {
+                            for (int i = servers.size() - 1; i >= 0; i--) {
+                                ServerEntry existing = servers.get(i);
+                                if (existing.servertype != ServerEntry.ServerType.LOCAL) continue;
+                                boolean sameOriginalName = originalName != null && !originalName.trim().isEmpty()
+                                        && normalizeSavedServerName(originalName).equals(normalizeSavedServerName(existing.servername));
+                                boolean sameOriginalAddress = (originalName == null || originalName.trim().isEmpty())
+                                        && originalIp != null && originalIp.equals(existing.ipaddr)
+                                        && originalPort == existing.tcpport;
+                                if (sameOriginalName || sameOriginalAddress) servers.remove(i);
+                            }
+                            addOrUpdateSavedServer(entry);
+                            Collections.sort(servers, this);
                         }
-                        else {
-                            servers.add(entry);
-                        }
-                        Collections.sort(servers, this);
                         adapter.updateServers();
                         saveServers();
                     }
@@ -459,6 +475,8 @@ public class ServerListActivity extends AppCompatActivity
             if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) || Permissions.WRITE_EXTERNAL_STORAGE.request(this)) {
                 exportServers();
             }
+        } else if (id == R.id.action_enter_joincode) {
+            enterJoinCode();
         } else if (id == R.id.action_settings) {
             Intent intent = new Intent(ServerListActivity.this, PreferencesActivity.class);
             startActivityForResult(intent, REQUEST_SETTINGS);
@@ -501,7 +519,10 @@ public class ServerListActivity extends AppCompatActivity
                 return true;
             } else if (id == R.id.action_editsrv) {
                 Intent intent = new Intent(this, ServerEntryActivity.class);
-                startActivityForResult(Utils.putServerEntry(intent, entry).putExtra(POSITION_NAME, position), REQUEST_EDITSERVER);
+                intent.putExtra(ORIGINAL_SERVER_NAME, entry.servername);
+                intent.putExtra(ORIGINAL_SERVER_IP, entry.ipaddr);
+                intent.putExtra(ORIGINAL_SERVER_PORT, entry.tcpport);
+                startActivityForResult(Utils.putServerEntry(intent, entry).putExtra(POSITION_NAME, servers.indexOf(entry)), REQUEST_EDITSERVER);
                 return true;
             } else if (id == R.id.action_removesrv) {
                 showRemoveServerDialog(entry);
@@ -581,7 +602,10 @@ public class ServerListActivity extends AppCompatActivity
                 BufferedReader source = new BufferedReader(new InputStreamReader(inputStream));
                 String line;
                 while ((line = source.readLine()) != null) {
-                    xml.append(line);
+                    if (xml.length() + line.length() > 2 * 1024 * 1024) {
+                        throw new java.io.IOException("TeamTalk server file is too large");
+                    }
+                    xml.append(line).append('\n');
                 }
             }
         } catch (Exception e) {
@@ -696,6 +720,10 @@ public class ServerListActivity extends AppCompatActivity
 
     private void addOrUpdateSavedServer(ServerEntry incoming) {
         incoming.servertype = ServerEntry.ServerType.LOCAL;
+        if (incoming.servername == null || incoming.servername.trim().isEmpty()) {
+            incoming.servername = incoming.ipaddr == null ? "" : incoming.ipaddr.trim();
+        }
+        if (incoming.servername.isEmpty()) return;
 
         String incomingName = normalizeSavedServerName(incoming.servername);
         if (!incomingName.isEmpty()) {
@@ -993,35 +1021,14 @@ public class ServerListActivity extends AppCompatActivity
         synchronized (servers) {
             SharedPreferences pref = getSharedPreferences(SERVERLIST_NAME, MODE_PRIVATE);
             SharedPreferences.Editor edit = pref.edit();
-
-            clearExistingServerPreferences(pref, edit);
-            saveLocalServersToPreferences(edit);
-            edit.commit();
+            edit.clear();
+            int count = saveLocalServersToPreferences(edit);
+            edit.putInt(SERVER_COUNT_KEY, count);
+            edit.apply();
         }
     }
 
-    private void clearExistingServerPreferences(SharedPreferences pref, SharedPreferences.Editor edit) {
-        int i = 0;
-        while (!pref.getString(i + ServerEntry.KEY_SERVERNAME, "").isEmpty()) {
-            removeServerPreferencesAtIndex(edit, i);
-            i++;
-        }
-    }
-
-    private void removeServerPreferencesAtIndex(SharedPreferences.Editor edit, int index) {
-        String[] keys = {
-            ServerEntry.KEY_SERVERNAME, ServerEntry.KEY_IPADDR, ServerEntry.KEY_TCPPORT,
-            ServerEntry.KEY_UDPPORT, ServerEntry.KEY_ENCRYPTED, ServerEntry.KEY_USERNAME,
-            ServerEntry.KEY_PASSWORD, ServerEntry.KEY_NICKNAME, ServerEntry.KEY_STATUSMSG, ServerEntry.KEY_REMEMBER_LAST_CHANNEL,
-            ServerEntry.KEY_CHANNEL, ServerEntry.KEY_CHANPASSWD
-        };
-        
-        for (String key : keys) {
-            edit.remove(index + key);
-        }
-    }
-
-    private void saveLocalServersToPreferences(SharedPreferences.Editor edit) {
+    private int saveLocalServersToPreferences(SharedPreferences.Editor edit) {
         int localServerIndex = 0;
         for (ServerEntry server : servers) {
             if (server.servertype == ServerEntry.ServerType.LOCAL) {
@@ -1029,6 +1036,7 @@ public class ServerListActivity extends AppCompatActivity
                 localServerIndex++;
             }
         }
+        return localServerIndex;
     }
 
     private void saveServerToPreferences(SharedPreferences.Editor edit, ServerEntry server, int index) {
@@ -1037,6 +1045,10 @@ public class ServerListActivity extends AppCompatActivity
         edit.putInt(index + ServerEntry.KEY_TCPPORT, server.tcpport);
         edit.putInt(index + ServerEntry.KEY_UDPPORT, server.udpport);
         edit.putBoolean(index + ServerEntry.KEY_ENCRYPTED, server.encrypted);
+        edit.putString(index + ServerEntry.KEY_CACERT, server.cacert);
+        edit.putString(index + ServerEntry.KEY_CLIENTCERT, server.clientcert);
+        edit.putString(index + ServerEntry.KEY_CLIENTCERTKEY, server.clientcertkey);
+        edit.putBoolean(index + ServerEntry.KEY_VERIFYPEER, server.verifypeer);
         edit.putString(index + ServerEntry.KEY_USERNAME, server.username);
         edit.putString(index + ServerEntry.KEY_PASSWORD, server.password);
         edit.putString(index + ServerEntry.KEY_NICKNAME, server.nickname);
@@ -1048,11 +1060,20 @@ public class ServerListActivity extends AppCompatActivity
 
     private void loadLocalServers() {
         SharedPreferences pref = getSharedPreferences(SERVERLIST_NAME, MODE_PRIVATE);
-        int i = 0;
-        while (!pref.getString(i + ServerEntry.KEY_SERVERNAME, "").isEmpty()) {
-            ServerEntry entry = loadServerFromPreferences(pref, i);
-            servers.add(entry);
-            i++;
+        int count = pref.getInt(SERVER_COUNT_KEY, -1);
+        if (count >= 0) {
+            for (int i = 0; i < count; i++) {
+                servers.add(loadServerFromPreferences(pref, i));
+            }
+        } else {
+            // Legacy format had no explicit count. Keep reading while either name or
+            // address exists so an old entry with an empty name cannot truncate the list.
+            int i = 0;
+            while (!pref.getString(i + ServerEntry.KEY_SERVERNAME, "").isEmpty()
+                    || !pref.getString(i + ServerEntry.KEY_IPADDR, "").isEmpty()) {
+                servers.add(loadServerFromPreferences(pref, i));
+                i++;
+            }
         }
 
         Collections.sort(servers, this);
@@ -1066,6 +1087,10 @@ public class ServerListActivity extends AppCompatActivity
         entry.tcpport = pref.getInt(index + ServerEntry.KEY_TCPPORT, 0);
         entry.udpport = pref.getInt(index + ServerEntry.KEY_UDPPORT, 0);
         entry.encrypted = pref.getBoolean(index + ServerEntry.KEY_ENCRYPTED, false);
+        entry.cacert = pref.getString(index + ServerEntry.KEY_CACERT, "");
+        entry.clientcert = pref.getString(index + ServerEntry.KEY_CLIENTCERT, "");
+        entry.clientcertkey = pref.getString(index + ServerEntry.KEY_CLIENTCERTKEY, "");
+        entry.verifypeer = pref.getBoolean(index + ServerEntry.KEY_VERIFYPEER, false);
         entry.username = pref.getString(index + ServerEntry.KEY_USERNAME, "");
         entry.password = pref.getString(index + ServerEntry.KEY_PASSWORD, "");
         entry.nickname = pref.getString(index + ServerEntry.KEY_NICKNAME, "");
@@ -1124,12 +1149,18 @@ public class ServerListActivity extends AppCompatActivity
         synchronized(servers) {
             Vector<ServerEntry> localServers = new Vector<>();
             SharedPreferences pref = getSharedPreferences(SERVERLIST_NAME, MODE_PRIVATE);
-            int i = 0;
-            // Load as long as either servername or ipaddr is present to handle empty names
-            while (!pref.getString(i + ServerEntry.KEY_SERVERNAME, "").isEmpty() || 
-                   !pref.getString(i + ServerEntry.KEY_IPADDR, "").isEmpty()) {
-                localServers.add(loadServerFromPreferences(pref, i));
-                i++;
+            int count = pref.getInt(SERVER_COUNT_KEY, -1);
+            if (count >= 0) {
+                for (int i = 0; i < count; i++) {
+                    localServers.add(loadServerFromPreferences(pref, i));
+                }
+            } else {
+                int i = 0;
+                while (!pref.getString(i + ServerEntry.KEY_SERVERNAME, "").isEmpty()
+                        || !pref.getString(i + ServerEntry.KEY_IPADDR, "").isEmpty()) {
+                    localServers.add(loadServerFromPreferences(pref, i));
+                    i++;
+                }
             }
             
             // If we have existing servers, we try to update them rather than clear
@@ -1168,9 +1199,7 @@ public class ServerListActivity extends AppCompatActivity
 
             if (!xml.isEmpty()) {
                 try {
-                    DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-                    DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-                    Document doc = dBuilder.parse(new InputSource(new StringReader(xml)));
+                    Document doc = Utils.parseXmlDocument(xml);
                     doc.getDocumentElement().normalize();
 
                     NodeList nList = doc.getElementsByTagName("teamtalk");
@@ -1380,9 +1409,11 @@ public class ServerListActivity extends AppCompatActivity
                 exportServer(entry);
             }
         } else if (actionId == R.id.action_editsrv) {
-            int position = servers.indexOf(entry);
             Intent intent = new Intent(this, ServerEntryActivity.class);
-            startActivityForResult(Utils.putServerEntry(intent, entry).putExtra(POSITION_NAME, position), REQUEST_EDITSERVER);
+            intent.putExtra(ORIGINAL_SERVER_NAME, entry.servername);
+            intent.putExtra(ORIGINAL_SERVER_IP, entry.ipaddr);
+            intent.putExtra(ORIGINAL_SERVER_PORT, entry.tcpport);
+            startActivityForResult(Utils.putServerEntry(intent, entry).putExtra(POSITION_NAME, servers.indexOf(entry)), REQUEST_EDITSERVER);
         } else if (actionId == R.id.action_removesrv) {
             showRemoveServerDialog(entry);
         }
@@ -1482,6 +1513,54 @@ public class ServerListActivity extends AppCompatActivity
         boolean success = Utils.saveServers(entries, filePath);
         int msgId = success ? successMsgId : R.string.err_file_write;
         showToast(getString(msgId, filePath));
+    }
+
+    private void enterJoinCode() {
+        AlertDialog.Builder alert = new AlertDialog.Builder(this);
+        alert.setTitle(R.string.action_enter_joincode);
+        alert.setMessage(R.string.text_specify_joincode);
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setSingleLine(true);
+        alert.setView(input);
+        alert.setPositiveButton(android.R.string.ok, (dialog, whichButton) -> {
+            InputMethodManager im = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            im.hideSoftInputFromWindow(input.getWindowToken(), 0);
+            String code = input.getText().toString().trim();
+            if (!code.isEmpty()) getServerFromJoinCode(code);
+        });
+        alert.setNegativeButton(android.R.string.cancel, (dialog, whichButton) -> {
+            InputMethodManager im = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            im.hideSoftInputFromWindow(input.getWindowToken(), 0);
+        });
+        AlertDialog dialog = alert.create();
+        dialog.setOnShowListener(d -> {
+            input.requestFocus();
+            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        });
+        dialog.show();
+    }
+
+    private void getServerFromJoinCode(String joincode) {
+        if (executorService == null) return;
+        executorService.execute(() -> {
+            String xml = Utils.getURL(AppInfo.getJoinCodeUrl(ServerListActivity.this, joincode));
+            Vector<ServerEntry> entries = xml.isEmpty() ? new Vector<>() : Utils.getXmlServerEntries(xml);
+            runOnUiThread(() -> {
+                if (entries != null && !entries.isEmpty()) {
+                    ServerEntry entry = entries.firstElement();
+                    serverentry = entry;
+                    mLastClickedServer = entry;
+                    if (mConnection.isBound()) {
+                        getService().setServerEntry(entry);
+                        if (!getService().reconnect())
+                            showToast(getString(R.string.err_connection));
+                    }
+                } else {
+                    showToast(getString(R.string.err_enter_joincode));
+                }
+            });
+        });
     }
 
     private void showToast(String message) {

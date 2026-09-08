@@ -33,6 +33,7 @@ import android.widget.AdapterView;
 import android.widget.Spinner;
 
 import dk.bearware.TeamTalkBase;
+import dk.bearware.ClientErrorMsg;
 import dk.bearware.UserAccount;
 import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
@@ -43,7 +44,9 @@ import dk.bearware.data.ServerEntry;
 
 public class UserAccountsActivity extends AppCompatActivity implements 
         TeamTalkConnectionListener, 
-        ClientEventListener.OnCmdUserAccountListener {
+        ClientEventListener.OnCmdUserAccountListener,
+        ClientEventListener.OnCmdSuccessListener,
+        ClientEventListener.OnCmdErrorListener {
 
     private static final String TAG = "UserAccountsActivity";
     public static final String EXTRA_USERID = "userid";
@@ -55,6 +58,7 @@ public class UserAccountsActivity extends AppCompatActivity implements
     private EditText searchEdit;
     private Spinner sortSpinner;
     private boolean isAscending = true;
+    private final java.util.Map<Integer, String> pendingDeleteAccounts = new java.util.HashMap<>();
 
 
     @Override
@@ -133,7 +137,7 @@ public class UserAccountsActivity extends AppCompatActivity implements
         if (mConnection.isBound()) {
             if (getService() != null && getService().getTTInstance() != null) {
                 allAccounts.clear();
-                getClient().doListUserAccounts(0, 100);
+                getClient().doListUserAccounts(0, 100000);
             }
         }
     }
@@ -160,7 +164,9 @@ public class UserAccountsActivity extends AppCompatActivity implements
     @Override
     public void onServiceConnected(TeamTalkService service) {
         service.getEventHandler().registerOnCmdUserAccount(this, true);
-        getClient().doListUserAccounts(0, 100);
+        service.getEventHandler().registerOnCmdSuccess(this, true);
+        service.getEventHandler().registerOnCmdError(this, true);
+        getClient().doListUserAccounts(0, 100000);
     }
 
     @Override
@@ -172,7 +178,9 @@ public class UserAccountsActivity extends AppCompatActivity implements
 
             boolean found = false;
             for (int i = 0; i < allAccounts.size(); i++) {
-                if (allAccounts.get(i).szUsername.equals(useraccount.szUsername)) {
+                String existingUsername = allAccounts.get(i).szUsername;
+                String incomingUsername = useraccount.szUsername;
+                if (existingUsername == null ? incomingUsername == null : existingUsername.equals(incomingUsername)) {
                     allAccounts.set(i, useraccount);
                     found = true;
                     break;
@@ -192,7 +200,9 @@ public class UserAccountsActivity extends AppCompatActivity implements
         } else {
             String q = query.toLowerCase();
             for (UserAccount acc : allAccounts) {
-                if (acc.szUsername.toLowerCase().contains(q) || acc.szNote.toLowerCase().contains(q)) {
+                String username = acc.szUsername == null ? "" : acc.szUsername;
+                String note = acc.szNote == null ? "" : acc.szNote;
+                if (username.toLowerCase().contains(q) || note.toLowerCase().contains(q)) {
                     filteredAccounts.add(acc);
                 }
             }
@@ -233,9 +243,15 @@ public class UserAccountsActivity extends AppCompatActivity implements
             intent.putExtra(UserAccountEditActivity.EXTRA_PASSWORD, account.szPassword);
             intent.putExtra(UserAccountEditActivity.EXTRA_USERTYPE, account.uUserType);
             intent.putExtra(UserAccountEditActivity.EXTRA_USERRIGHTS, account.uUserRights);
+            intent.putExtra(UserAccountEditActivity.EXTRA_USER_DATA, account.nUserData);
             intent.putExtra(UserAccountEditActivity.EXTRA_NOTE, account.szNote);
             intent.putExtra(UserAccountEditActivity.EXTRA_INIT_CHANNEL, account.szInitChannel);
             intent.putExtra(UserAccountEditActivity.EXTRA_OPERATOR_CHANNELS, account.autoOperatorChannels);
+            intent.putExtra(UserAccountEditActivity.EXTRA_AUDIO_CODEC_BPS_LIMIT, account.nAudioCodecBpsLimit);
+            if (account.abusePrevent != null) {
+                intent.putExtra(UserAccountEditActivity.EXTRA_ABUSE_COMMANDS_LIMIT, account.abusePrevent.nCommandsLimit);
+                intent.putExtra(UserAccountEditActivity.EXTRA_ABUSE_INTERVAL_MSEC, account.abusePrevent.nCommandsIntervalMSec);
+            }
             startActivity(intent);
         } else if (which == 1) {
             Intent intent = new Intent(this, UserAccountEditActivity.class);
@@ -244,9 +260,15 @@ public class UserAccountsActivity extends AppCompatActivity implements
             intent.putExtra(UserAccountEditActivity.EXTRA_PASSWORD, account.szPassword);
             intent.putExtra(UserAccountEditActivity.EXTRA_USERTYPE, account.uUserType);
             intent.putExtra(UserAccountEditActivity.EXTRA_USERRIGHTS, account.uUserRights);
+            intent.putExtra(UserAccountEditActivity.EXTRA_USER_DATA, account.nUserData);
             intent.putExtra(UserAccountEditActivity.EXTRA_NOTE, account.szNote);
             intent.putExtra(UserAccountEditActivity.EXTRA_INIT_CHANNEL, account.szInitChannel);
             intent.putExtra(UserAccountEditActivity.EXTRA_OPERATOR_CHANNELS, account.autoOperatorChannels);
+            intent.putExtra(UserAccountEditActivity.EXTRA_AUDIO_CODEC_BPS_LIMIT, account.nAudioCodecBpsLimit);
+            if (account.abusePrevent != null) {
+                intent.putExtra(UserAccountEditActivity.EXTRA_ABUSE_COMMANDS_LIMIT, account.abusePrevent.nCommandsLimit);
+                intent.putExtra(UserAccountEditActivity.EXTRA_ABUSE_INTERVAL_MSEC, account.abusePrevent.nCommandsIntervalMSec);
+            }
             startActivity(intent);
         } else if (which == 2) {
             confirmDelete(account);
@@ -263,6 +285,10 @@ public class UserAccountsActivity extends AppCompatActivity implements
             exportEntry.tcpport = server.tcpport;
             exportEntry.udpport = server.udpport;
             exportEntry.encrypted = server.encrypted;
+            exportEntry.cacert = server.cacert;
+            exportEntry.clientcert = server.clientcert;
+            exportEntry.clientcertkey = server.clientcertkey;
+            exportEntry.verifypeer = server.verifypeer;
             exportEntry.username = account.szUsername;
             exportEntry.password = account.szPassword;
             exportEntry.servername = server.servername;
@@ -283,12 +309,33 @@ public class UserAccountsActivity extends AppCompatActivity implements
                 .setTitle(R.string.dialog_confirm_delete)
                 .setMessage(getString(R.string.msg_confirm_delete_account, account.szUsername))
                 .setPositiveButton(android.R.string.yes, (dialog, which) -> {
-                    getClient().doDeleteUserAccount(account.szUsername);
-                    allAccounts.remove(account);
-                    filterAccounts(searchEdit.getText().toString());
+                    int cmdId = getClient().doDeleteUserAccount(account.szUsername);
+                    if (cmdId > 0) {
+                        pendingDeleteAccounts.put(cmdId, account.szUsername);
+                        Toast.makeText(this, R.string.text_cmd_processing, Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, R.string.err_user_account_request_failed, Toast.LENGTH_SHORT).show();
+                    }
                 })
                 .setNegativeButton(android.R.string.no, null)
                 .show();
+    }
+
+    @Override
+    public void onCmdSuccess(int cmdId) {
+        String username = pendingDeleteAccounts.remove(cmdId);
+        if (username == null) return;
+        for (int i = allAccounts.size() - 1; i >= 0; i--) {
+            String existing = allAccounts.get(i).szUsername;
+            if (username.equals(existing)) allAccounts.remove(i);
+        }
+        filterAccounts(searchEdit.getText().toString());
+    }
+
+    @Override
+    public void onCmdError(int cmdId, ClientErrorMsg errmsg) {
+        if (pendingDeleteAccounts.remove(cmdId) == null) return;
+        Utils.notifyError(this, errmsg);
     }
 
     @Override

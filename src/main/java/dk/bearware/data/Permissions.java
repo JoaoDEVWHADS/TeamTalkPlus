@@ -165,10 +165,9 @@ public enum Permissions {
             ActivityCompat.requestPermissions(activity, list.toArray(new String[0]), 1000);
         }
         
-        // Handle MANAGE_EXTERNAL_STORAGE separately as it requires Intent on Android 11+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !MANAGE_EXTERNAL_STORAGE.isGranted(activity)) {
-            MANAGE_EXTERNAL_STORAGE.emitRequest(activity);
-        }
+        // MANAGE_EXTERNAL_STORAGE must never be launched concurrently with the
+        // runtime permission dialog. Request it only from the feature that truly
+        // needs broad file access.
     }
 
     private static boolean idEquals(String id1, String id2) {
@@ -177,7 +176,17 @@ public enum Permissions {
     }
 
     public static void requestEssential(@NonNull Activity activity) {
-        requestAll(activity);
+        java.util.List<String> list = new java.util.ArrayList<>();
+        Permissions[] essential = { RECORD_AUDIO, READ_PHONE_STATE, BLUETOOTH, POST_NOTIFICATIONS };
+        for (Permissions p : essential) {
+            if (p.isGranted(activity)) continue;
+            if (p == POST_NOTIFICATIONS && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) continue;
+            if (idEquals(p.id, Manifest.permission.BLUETOOTH_CONNECT) && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) continue;
+            list.add(p.id);
+        }
+        if (!list.isEmpty()) {
+            ActivityCompat.requestPermissions(activity, list.toArray(new String[0]), 1000);
+        }
     }
 
     @Nullable

@@ -130,9 +130,13 @@ public class UserPropActivity extends AppCompatActivity implements TeamTalkConne
         final SeekBar voiceVol = findViewById(R.id.user_vol_voiceSeekBar);
         final Button defVoiceBtn = findViewById(R.id.defVoiceVolBtn);
         final SwitchCompat voiceMute = findViewById(R.id.user_mutevoiceSwitch);
+        final SwitchCompat voiceMuteLeft = findViewById(R.id.user_mutevoice_leftSwitch);
+        final SwitchCompat voiceMuteRight = findViewById(R.id.user_mutevoice_rightSwitch);
         final SeekBar mediaVol = findViewById(R.id.user_vol_mediaSeekBar);
         final Button defMfBtn = findViewById(R.id.defMfVolBtn);
         final SwitchCompat mediaMute = findViewById(R.id.user_mutemediaSwitch);
+        final SwitchCompat mediaMuteLeft = findViewById(R.id.user_mutemedia_leftSwitch);
+        final SwitchCompat mediaMuteRight = findViewById(R.id.user_mutemedia_rightSwitch);
         final SwitchCompat subscribeIntercepttxtmsg = findViewById(R.id.user_subscribeintercepttxtmsgSwitch);
         final SwitchCompat subscribeInterceptchanmsg = findViewById(R.id.user_subscribeinterceptchanmsgSwitch);
         final SwitchCompat subscribeInterceptvoice = findViewById(R.id.user_subscribeinterceptvoiceSwitch);
@@ -181,7 +185,11 @@ public class UserPropActivity extends AppCompatActivity implements TeamTalkConne
         mediaVol.setProgress(Utils.refVolumeToPercent(user.nVolumeMediaFile));
         mediaVol.setContentDescription(getString(R.string.user_prop_title_media_volume) + ": " + mediaVol.getProgress() + "%");
         voiceMute.setChecked((user.uUserState & UserState.USERSTATE_MUTE_VOICE) != 0);
+        voiceMuteLeft.setChecked(!user.stereoPlaybackVoice[0]);
+        voiceMuteRight.setChecked(!user.stereoPlaybackVoice[1]);
         mediaMute.setChecked((user.uUserState & UserState.USERSTATE_MUTE_MEDIAFILE) != 0);
+        mediaMuteLeft.setChecked(!user.stereoPlaybackMediaFile[0]);
+        mediaMuteRight.setChecked(!user.stereoPlaybackMediaFile[1]);
         subscribeIntercepttxtmsg.setChecked((user.uLocalSubscriptions & Subscription.SUBSCRIBE_INTERCEPT_USER_MSG) != 0);
         subscribeInterceptchanmsg.setChecked((user.uLocalSubscriptions & Subscription.SUBSCRIBE_INTERCEPT_CHANNEL_MSG) != 0);
         subscribeInterceptvoice.setChecked((user.uLocalSubscriptions & Subscription.SUBSCRIBE_INTERCEPT_VOICE) != 0);
@@ -247,8 +255,18 @@ public class UserPropActivity extends AppCompatActivity implements TeamTalkConne
                 getClient().setUserMute(user.nUserID, StreamType.STREAMTYPE_VOICE, checked);
                 getClient().pumpMessage(ClientEvent.CLIENTEVENT_USER_STATECHANGE, user.nUserID);
             }
+            else if(btn == voiceMuteLeft || btn == voiceMuteRight) {
+                getClient().setUserStereo(user.nUserID, StreamType.STREAMTYPE_VOICE,
+                        !voiceMuteLeft.isChecked(), !voiceMuteRight.isChecked());
+                getClient().pumpMessage(ClientEvent.CLIENTEVENT_USER_STATECHANGE, user.nUserID);
+            }
             else if(btn == mediaMute) {
                 getClient().setUserMute(user.nUserID, StreamType.STREAMTYPE_MEDIAFILE_AUDIO, checked);
+                getClient().pumpMessage(ClientEvent.CLIENTEVENT_USER_STATECHANGE, user.nUserID);
+            }
+            else if(btn == mediaMuteLeft || btn == mediaMuteRight) {
+                getClient().setUserStereo(user.nUserID, StreamType.STREAMTYPE_MEDIAFILE_AUDIO,
+                        !mediaMuteLeft.isChecked(), !mediaMuteRight.isChecked());
                 getClient().pumpMessage(ClientEvent.CLIENTEVENT_USER_STATECHANGE, user.nUserID);
             }
             else if(btn == subscribeIntercepttxtmsg)
@@ -282,7 +300,11 @@ public class UserPropActivity extends AppCompatActivity implements TeamTalkConne
             }
         };
         voiceMute.setOnCheckedChangeListener(muteListener);
+        voiceMuteLeft.setOnCheckedChangeListener(muteListener);
+        voiceMuteRight.setOnCheckedChangeListener(muteListener);
         mediaMute.setOnCheckedChangeListener(muteListener);
+        mediaMuteLeft.setOnCheckedChangeListener(muteListener);
+        mediaMuteRight.setOnCheckedChangeListener(muteListener);
         subscribeIntercepttxtmsg.setOnCheckedChangeListener(muteListener);
         subscribeInterceptchanmsg.setOnCheckedChangeListener(muteListener);
         subscribeInterceptvoice.setOnCheckedChangeListener(muteListener);

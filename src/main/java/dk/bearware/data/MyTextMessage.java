@@ -4,6 +4,8 @@ package dk.bearware.data;
 import java.nio.charset.StandardCharsets;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Vector;
 
 import dk.bearware.Constants;
@@ -17,12 +19,7 @@ public class MyTextMessage extends TextMessage {
     public Date time = Calendar.getInstance().getTime();
 
     public MyTextMessage(TextMessage msg, String name) {
-        this.nChannelID = msg.nChannelID;
-        this.nFromUserID = msg.nFromUserID;
-        this.nMsgType = msg.nMsgType;
-        this.nToUserID = msg.nToUserID;
-        this.szFromUsername = msg.szFromUsername;
-        this.szMessage = msg.szMessage;
+        super(msg);
         this.szNickName = name;
     }
 
@@ -75,6 +72,55 @@ public class MyTextMessage extends TextMessage {
         newmsg.szMessage = remain.substring(curlen);
         result.addAll(newmsg.split());
         return result;
+    }
+
+    public static MyTextMessage mergeMessage(Map<Integer, Vector<MyTextMessage>> pending, MyTextMessage msg) {
+        int key = (msg.nMsgType << 16) | msg.nFromUserID;
+        Vector<MyTextMessage> parts = pending.get(key);
+        if (msg.bMore) {
+            if (parts == null) {
+                parts = new Vector<>();
+                pending.put(key, parts);
+            }
+            parts.add(msg);
+            if (parts.size() > 1000)
+                pending.remove(key);
+            return null;
+        }
+        if (parts != null) {
+            StringBuilder content = new StringBuilder();
+            for (MyTextMessage part : parts)
+                content.append(part.szMessage);
+            content.append(msg.szMessage);
+            msg.szMessage = content.toString();
+            pending.remove(key);
+        }
+        return msg;
+    }
+
+    public static void merge(Vector<MyTextMessage> msgs) {
+        Map<Integer, Vector<MyTextMessage>> mergeMsgs = new HashMap<>();
+        Vector<MyTextMessage> removeMsgs = new Vector<>();
+        for (MyTextMessage m : msgs) {
+            int key = (m.nMsgType << 16) | m.nFromUserID;
+            Vector<MyTextMessage> moreMessages = mergeMsgs.get(key);
+            if (m.bMore) {
+                if (moreMessages == null) {
+                    moreMessages = new Vector<>();
+                    mergeMsgs.put(key, moreMessages);
+                }
+                moreMessages.add(m);
+            } else if (moreMessages != null) {
+                StringBuilder content = new StringBuilder();
+                for (MyTextMessage moreMessage : moreMessages) {
+                    content.append(moreMessage.szMessage);
+                    removeMsgs.add(moreMessage);
+                }
+                m.szMessage = content.append(m.szMessage).toString();
+                mergeMsgs.remove(key);
+            }
+        }
+        msgs.removeAll(removeMsgs);
     }
 
     public static final int MSGTYPE_LOG_INFO    = 0x80000000;

@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 import dk.bearware.Channel;
+import dk.bearware.ClientErrorMsg;
 import dk.bearware.User;
 import dk.bearware.events.ClientEventListener;
 import dk.bearware.backend.TeamTalkConnection;
@@ -38,7 +39,9 @@ public class MoveUsersActivity extends AppCompatActivity implements TeamTalkConn
         ClientEventListener.OnCmdUserLoggedInListener,
         ClientEventListener.OnCmdChannelNewListener,
         ClientEventListener.OnCmdChannelUpdateListener,
-        ClientEventListener.OnCmdChannelRemoveListener {
+        ClientEventListener.OnCmdChannelRemoveListener,
+        ClientEventListener.OnCmdSuccessListener,
+        ClientEventListener.OnCmdErrorListener {
 
     private TeamTalkConnection ttConnection;
     private ListView usersListView;
@@ -54,6 +57,8 @@ public class MoveUsersActivity extends AppCompatActivity implements TeamTalkConn
     private int selectedTargetId = 0;   
     
     private Set<Integer> selectedUserIds = new HashSet<>();
+    private final java.util.Map<Integer, Integer> pendingMoves = new java.util.HashMap<>();
+    private int successfulMoves = 0;
 
     private UserAdapter userAdapter;
 
@@ -196,6 +201,8 @@ public class MoveUsersActivity extends AppCompatActivity implements TeamTalkConn
         service.getEventHandler().registerOnCmdChannelNew(this, true);
         service.getEventHandler().registerOnCmdChannelUpdate(this, true);
         service.getEventHandler().registerOnCmdChannelRemove(this, true);
+        service.getEventHandler().registerOnCmdSuccess(this, true);
+        service.getEventHandler().registerOnCmdError(this, true);
         refreshData();
     }
 
@@ -272,14 +279,42 @@ public class MoveUsersActivity extends AppCompatActivity implements TeamTalkConn
     }
 
     private void performMove(int targetChannelId) {
-        if (ttConnection.getService() == null) return;
-
-        for (Integer uid : selectedUserIds) {
-            ttConnection.getService().getTTInstance().doMoveUser(uid, targetChannelId);
+        if (ttConnection.getService() == null || !pendingMoves.isEmpty()) return;
+        successfulMoves = 0;
+        for (Integer uid : new java.util.ArrayList<>(selectedUserIds)) {
+            int cmdId = ttConnection.getService().getTTInstance().doMoveUser(uid, targetChannelId);
+            if (cmdId > 0) pendingMoves.put(cmdId, uid);
         }
+        if (pendingMoves.isEmpty()) {
+            Toast.makeText(this, R.string.text_con_cmderr, Toast.LENGTH_SHORT).show();
+        } else {
+            btnMove.setEnabled(false);
+            Toast.makeText(this, R.string.text_cmd_processing, Toast.LENGTH_SHORT).show();
+        }
+    }
 
-        Toast.makeText(this, getString(R.string.msg_users_moved, selectedUserIds.size()), Toast.LENGTH_SHORT).show();
-        selectedUserIds.clear();
+    @Override
+    public void onCmdSuccess(int cmdId) {
+        Integer uid = pendingMoves.remove(cmdId);
+        if (uid == null) return;
+        successfulMoves++;
+        selectedUserIds.remove(uid);
+        finishMoveBatchIfNeeded();
+    }
+
+    @Override
+    public void onCmdError(int cmdId, ClientErrorMsg errmsg) {
+        if (pendingMoves.remove(cmdId) == null) return;
+        Utils.notifyError(this, errmsg);
+        finishMoveBatchIfNeeded();
+    }
+
+    private void finishMoveBatchIfNeeded() {
+        if (!pendingMoves.isEmpty()) return;
+        btnMove.setEnabled(true);
+        if (successfulMoves > 0)
+            Toast.makeText(this, getString(R.string.msg_users_moved, successfulMoves), Toast.LENGTH_SHORT).show();
+        successfulMoves = 0;
         refreshData();
     }
 

@@ -4,14 +4,15 @@ package dk.bearware.data;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.Notification;
 import android.app.NotificationManager;
+import android.app.NotificationChannel;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Build;
 import androidx.core.view.ViewCompat;
+import androidx.core.app.NotificationCompat;
 import android.os.Environment;
 import android.text.format.Formatter;
 import android.util.SparseArray;
@@ -20,6 +21,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
+import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -35,6 +37,8 @@ import dk.bearware.FileTransfer;
 import dk.bearware.FileTransferStatus;
 import dk.bearware.RemoteFile;
 import dk.bearware.TeamTalkBase;
+import dk.bearware.UserAccount;
+import dk.bearware.UserRight;
 import dk.bearware.backend.TeamTalkService;
 import dk.bearware.events.ClientEventListener;
 import dk.bearware.gui.AccessibilityAssistant;
@@ -51,6 +55,7 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
         VIEW_TYPE_COUNT = 2;
 
     private static final String PROGRESS_NOTIFICATION_TAG = "file_transfer";
+    private static final String TRANSFER_NOTIFICATION_CHANNEL_ID = "TT_TRANSFERS";
 
     private final Context context;
     private final Activity activity;
@@ -62,7 +67,7 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
     private TeamTalkBase ttClient;
     private Vector<RemoteFile> remoteFiles;
     private final Map<String, FileTransfer> downloads;
-    private final SparseArray<Notification.Builder> uploads;
+    private final SparseArray<NotificationCompat.Builder> uploads;
     private volatile int chanId;
     private volatile boolean needRefresh;
 
@@ -77,6 +82,15 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
         uploads = new SparseArray<>();
         chanId = 0;
         needRefresh = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    TRANSFER_NOTIFICATION_CHANNEL_ID,
+                    "File Transfers",
+                    NotificationManager.IMPORTANCE_LOW);
+            channel.setSound(null, null);
+            channel.enableVibration(false);
+            notificationManager.createNotificationChannel(channel);
+        }
     }
 
     public void update() {
@@ -215,12 +229,10 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
         final RemoteFile remoteFile = remoteFiles.get(position);
         View.OnClickListener buttonClickListener = v -> {
             if (v.getId() == R.id.cancel_btn) {
-                {
                 FileTransfer transfer = downloads.get(remoteFile.szFileName);
-                if (ttClient.cancelFileTransfer(transfer.nTransferID)) {
-                downloadCancellationCleanup(transfer);
-                notifyDataSetChanged();
-                }
+                if (transfer != null && ttClient.cancelFileTransfer(transfer.nTransferID)) {
+                    downloadCancellationCleanup(transfer);
+                    notifyDataSetChanged();
                 }
             } else if (v.getId() == R.id.download_btn) {
                 {
@@ -291,6 +303,29 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
             ViewCompat.setAccessibilityDelegate(downloadButton, accessibilityAssistant);
             removeButton.setOnClickListener(buttonClickListener);
             ViewCompat.setAccessibilityDelegate(removeButton, accessibilityAssistant);
+
+            convertView.setOnClickListener(null);
+            convertView.setOnLongClickListener(v -> {
+                PopupMenu popup = new PopupMenu(context, v);
+                popup.getMenuInflater().inflate(R.menu.file_actions, popup.getMenu());
+                UserAccount myuseraccount = new UserAccount();
+                boolean downloadRight = ttClient != null && ttClient.getMyUserAccount(myuseraccount)
+                        && (myuseraccount.uUserRights & UserRight.USERRIGHT_DOWNLOAD_FILES) != UserRight.USERRIGHT_NONE;
+                android.view.MenuItem downloadItem = popup.getMenu().findItem(R.id.action_downloadfile);
+                if (downloadItem != null) downloadItem.setEnabled(downloadRight).setVisible(downloadRight);
+                popup.setOnMenuItemClickListener(item -> {
+                    if (item.getItemId() == R.id.action_downloadfile) {
+                        downloadButton.performClick();
+                        return true;
+                    } else if (item.getItemId() == R.id.action_removefile) {
+                        removeButton.performClick();
+                        return true;
+                    }
+                    return false;
+                });
+                popup.show();
+                return true;
+            });
             break;
         }
         case FILE_TRANSFER_VIEW_TYPE: {
@@ -301,6 +336,20 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
             Button cancelButton = convertView.findViewById(R.id.cancel_btn);
             cancelButton.setOnClickListener(buttonClickListener);
             ViewCompat.setAccessibilityDelegate(cancelButton, accessibilityAssistant);
+            convertView.setOnClickListener(null);
+            convertView.setOnLongClickListener(v -> {
+                PopupMenu popup = new PopupMenu(context, v);
+                popup.getMenuInflater().inflate(R.menu.file_transfer_actions, popup.getMenu());
+                popup.setOnMenuItemClickListener(item -> {
+                    if (item.getItemId() == R.id.action_cancel) {
+                        cancelTransfer(remoteFile);
+                        return true;
+                    }
+                    return false;
+                });
+                popup.show();
+                return true;
+            });
             break;
         }
         default:
@@ -309,6 +358,20 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
         ((TextView)convertView.findViewById(R.id.filename)).setText(remoteFile.szFileName);
         ViewCompat.setAccessibilityDelegate(convertView, accessibilityAssistant);
         return convertView;
+    }
+
+    private void cancelTransfer(RemoteFile remoteFile) {
+        AlertDialog.Builder alert = new AlertDialog.Builder(context);
+        alert.setMessage(context.getString(R.string.cancel_transfer_confirmation, remoteFile.szFileName));
+        alert.setPositiveButton(android.R.string.yes, (dialog, whichButton) -> {
+            FileTransfer transfer = downloads.get(remoteFile.szFileName);
+            if (transfer != null && ttClient.cancelFileTransfer(transfer.nTransferID)) {
+                downloadCancellationCleanup(transfer);
+                notifyDataSetChanged();
+            }
+        });
+        alert.setNegativeButton(android.R.string.no, null);
+        alert.show();
     }
 
     @SuppressLint("NewApi") @SuppressWarnings("fallthrough")
@@ -345,13 +408,15 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
                 default:
                     break;
                 }
-                if (newState) {
+                if (progress && accessibilityAssistant.isUiUpdateDiscouraged()) {
+                    needRefresh = true;
+                } else if (newState) {
                     notifyDataSetChanged();
                 }
             }
         }
         else {
-            Notification.Builder progressNotification = uploads.get(transfer.nTransferID);
+            NotificationCompat.Builder progressNotification = uploads.get(transfer.nTransferID);
             switch (transfer.nStatus) {
             case FileTransferStatus.FILETRANSFER_ERROR:
                 if (progressNotification != null)
@@ -367,7 +432,7 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
                 break;
             case FileTransferStatus.FILETRANSFER_ACTIVE:
                 if (progressNotification == null) {
-                    progressNotification = new Notification.Builder(context);
+                    progressNotification = new NotificationCompat.Builder(context, TRANSFER_NOTIFICATION_CHANNEL_ID);
                     Intent cancellationIntent = new Intent(context, TeamTalkService.class);
                     int id = transfer.nTransferID;
                     cancellationIntent.putExtra(TeamTalkService.CANCEL_TRANSFER, id);
@@ -375,6 +440,7 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
                         .setContentTitle(context.getString(R.string.upload_progress_title, transfer.szRemoteFileName))
                         .setContentIntent(PendingIntent.getService(context, id, cancellationIntent, PendingIntent.FLAG_IMMUTABLE))
                         .setAutoCancel(true)
+                        .setOngoing(true)
                         .setShowWhen(false);
                     uploads.put(id, progressNotification);
                 }
@@ -385,6 +451,7 @@ implements Comparator<RemoteFile>, ClientEventListener.OnFileTransferListener {
                     progressNotification.setSmallIcon(android.R.drawable.stat_sys_upload_done)
                         .setContentText(context.getString(R.string.complete))
                         .setProgress(0, 0, false)
+                        .setOngoing(false)
                         .setContentIntent(PendingIntent.getActivity(context, 0, new Intent(), PendingIntent.FLAG_IMMUTABLE));
                     notificationManager.notify(PROGRESS_NOTIFICATION_TAG, transfer.nTransferID, progressNotification.build());
                     uploads.remove(transfer.nTransferID);

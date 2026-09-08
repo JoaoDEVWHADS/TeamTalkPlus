@@ -138,13 +138,18 @@ extends AppCompatActivity implements TeamTalkConnectionListener, ClientEventList
                                          ttclient.getMyUserID());
 
         ListView lv = findViewById(R.id.user_im_listview);
-        lv.setTranscriptMode(ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL);
+        lv.setTranscriptMode(ListView.TRANSCRIPT_MODE_NORMAL);
         lv.setAdapter(adapter);
         adapter.notifyDataSetChanged();
-        accessibilityAssistant.focusLastListItem(lv);
 
         Button send_btn = this.findViewById(R.id.user_im_sendbtn);
         final EditText send_msg = this.findViewById(R.id.user_im_edittext);
+        send_msg.post(() -> {
+            send_msg.requestFocus();
+            send_msg.setSelection(send_msg.getText().length());
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.showSoftInput(send_msg, InputMethodManager.SHOW_IMPLICIT);
+        });
         send_btn.setOnClickListener(v -> {
             String newmsg = send_msg.getText().toString();
             if(newmsg.isEmpty())
@@ -159,12 +164,17 @@ extends AppCompatActivity implements TeamTalkConnectionListener, ClientEventList
             textmsg.nToUserID = userid;
             textmsg.szMessage = newmsg;
 
+            Vector<MyTextMessage> parts = textmsg.split();
             boolean sent = true;
-            for (MyTextMessage m : textmsg.split()) {
-                sent = sent && ttclient.doTextMessage(m) > 0;
-                service.getUserTextMsgs(userid).add(m);
+            for (MyTextMessage m : parts) {
+                if (ttclient.doTextMessage(m) <= 0) {
+                    sent = false;
+                    break;
+                }
             }
             if (sent) {
+                service.getUserTextMsgs(userid).addAll(parts);
+                MyTextMessage.merge(service.getUserTextMsgs(userid));
                 MainActivity.playPrivateMessageSentSound(textmsg.szMessage);
                 send_msg.setText("");
                 adapter.notifyDataSetChanged();
@@ -247,6 +257,7 @@ extends AppCompatActivity implements TeamTalkConnectionListener, ClientEventList
     public void onAccessibilityActionClick(View view, int actionId) {
         Object item = view.getTag();
         if (item instanceof MyTextMessage) {
+            MyTextMessage msg = (MyTextMessage) item;
             if (actionId == R.string.action_reply) {
                 EditText send_msg = findViewById(R.id.user_im_edittext);
                 if (send_msg != null) {
@@ -254,6 +265,14 @@ extends AppCompatActivity implements TeamTalkConnectionListener, ClientEventList
                     InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
                     imm.showSoftInput(send_msg, InputMethodManager.SHOW_IMPLICIT);
                 }
+            } else if (actionId == R.string.action_copyname) {
+                adapter.copyMessageName(this, msg);
+            } else if (actionId == R.string.action_copymessage) {
+                adapter.copyMessageContent(this, msg);
+            } else if (actionId == R.string.action_deletemessage) {
+                adapter.deleteMessage(msg);
+            } else if (actionId == R.string.action_clear) {
+                adapter.clearMessages();
             }
         }
     }
@@ -266,6 +285,12 @@ extends AppCompatActivity implements TeamTalkConnectionListener, ClientEventList
             MyTextMessage msg = (MyTextMessage) item;
             if (msg.nFromUserID != getService().getTTInstance().getMyUserID() && msg.nMsgType == TextMsgType.MSGTYPE_USER) {
                 actions.add(new AccessibilityActionCompat(R.string.action_reply, getString(R.string.action_reply)));
+            }
+            if (msg.nMsgType == TextMsgType.MSGTYPE_USER) {
+                actions.add(new AccessibilityActionCompat(R.string.action_copyname, getString(R.string.action_copyname)));
+                actions.add(new AccessibilityActionCompat(R.string.action_copymessage, getString(R.string.action_copymessage)));
+                actions.add(new AccessibilityActionCompat(R.string.action_deletemessage, getString(R.string.action_deletemessage)));
+                actions.add(new AccessibilityActionCompat(R.string.action_clear, getString(R.string.action_clear)));
             }
         }
         return actions;

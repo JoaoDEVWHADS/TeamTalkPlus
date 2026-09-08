@@ -24,20 +24,25 @@ import java.util.List;
 
 import dk.bearware.BanType;
 import dk.bearware.BannedUser;
+import dk.bearware.ClientErrorMsg;
 import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
 import dk.bearware.backend.TeamTalkService;
 import dk.bearware.events.ClientEventListener;
 
 public class ServerBannedUsersActivity extends AppCompatActivity implements TeamTalkConnectionListener,
-        ClientEventListener.OnCmdBannedUserListener {
+        ClientEventListener.OnCmdBannedUserListener,
+        ClientEventListener.OnCmdSuccessListener,
+        ClientEventListener.OnCmdErrorListener {
 
     private TeamTalkConnection ttConnection;
     private ListView bannedUsersListView;
     private TextView emptyView;
     private BannedUserAdapter adapter;
     private List<BannedUser> bannedUsers = new ArrayList<>();
-    private Set<Integer> selectedPositions = new HashSet<>(); 
+    private Set<Integer> selectedPositions = new HashSet<>();
+    private final java.util.Map<Integer, BannedUser> pendingUnbans = new java.util.HashMap<>();
+    private int pendingUnbanSuccessCount = 0; 
     
     private int channelId = 0; // Default to 0 for server bans
 
@@ -107,21 +112,25 @@ public class ServerBannedUsersActivity extends AppCompatActivity implements Team
                 .setMessage(getResources().getQuantityString(R.plurals.confirm_unban_user_plural, selectedPositions.size(), selectedPositions.size()))
                 .setPositiveButton(android.R.string.yes, (dialog, which) -> {
                      if (ttConnection.getService() != null) {
-                          int unbannedCount = 0;
-                          for (Integer pos : selectedPositions) {
-                              if (pos < bannedUsers.size()) {
-                                  BannedUser u = bannedUsers.get(pos);
-                                  ttConnection.getService().getTTInstance().doUnBanUserEx(u);
-                                  unbannedCount++;
-                              }
-                          }
-                          
-                          Toast.makeText(this, getString(R.string.msg_users_unbanned, unbannedCount), Toast.LENGTH_SHORT).show();
-
-                          selectedPositions.clear();
-                          bannedUsers.clear();
-                          adapter.notifyDataSetChanged();
-                          ttConnection.getService().getTTInstance().doListBans(channelId, 0, 500);
+                         java.util.List<BannedUser> targets = new java.util.ArrayList<>();
+                         for (Integer pos : selectedPositions) {
+                             if (pos >= 0 && pos < bannedUsers.size()) targets.add(bannedUsers.get(pos));
+                         }
+                         int queued = 0;
+                         for (BannedUser u : targets) {
+                             int cmdId = ttConnection.getService().getTTInstance().doUnBanUserEx(u);
+                             if (cmdId > 0) {
+                                 pendingUnbans.put(cmdId, u);
+                                 queued++;
+                             }
+                         }
+                         if (queued == 0) {
+                             Toast.makeText(this, R.string.text_con_cmderr, Toast.LENGTH_SHORT).show();
+                         } else {
+                             selectedPositions.clear();
+                             adapter.notifyDataSetChanged();
+                             Toast.makeText(this, R.string.text_cmd_processing, Toast.LENGTH_SHORT).show();
+                         }
                      }
                 })
                 .setNegativeButton(android.R.string.no, null)
@@ -149,7 +158,9 @@ public class ServerBannedUsersActivity extends AppCompatActivity implements Team
     @Override
     public void onServiceConnected(TeamTalkService service) {
         service.getEventHandler().registerOnCmdBannedUser(this, true);
-        service.getTTInstance().doListBans(channelId, 0, 500);
+        service.getEventHandler().registerOnCmdSuccess(this, true);
+        service.getEventHandler().registerOnCmdError(this, true);
+        service.getTTInstance().doListBans(channelId, 0, 1000000);
     }
 
     @Override
@@ -159,7 +170,7 @@ public class ServerBannedUsersActivity extends AppCompatActivity implements Team
     public void onCmdBannedUser(BannedUser banneduser) {
         boolean exists = false;
         for(BannedUser u : bannedUsers) {
-            if (u.szNickname.equals(banneduser.szNickname) && u.szIPAddress.equals(banneduser.szIPAddress)) {
+            if (Utils.sameBan(u, banneduser)) {
                 exists = true;
                 break;
             }
@@ -171,6 +182,33 @@ public class ServerBannedUsersActivity extends AppCompatActivity implements Team
         }
     }
     
+    @Override
+    public void onCmdSuccess(int cmdId) {
+        BannedUser target = pendingUnbans.remove(cmdId);
+        if (target == null) return;
+        pendingUnbanSuccessCount++;
+        for (int i = bannedUsers.size() - 1; i >= 0; i--) {
+            if (Utils.sameBan(bannedUsers.get(i), target)) bannedUsers.remove(i);
+        }
+        adapter.notifyDataSetChanged();
+        finishPendingUnbanBatchIfNeeded();
+    }
+
+    @Override
+    public void onCmdError(int cmdId, ClientErrorMsg errmsg) {
+        if (pendingUnbans.remove(cmdId) == null) return;
+        Utils.notifyError(this, errmsg);
+        finishPendingUnbanBatchIfNeeded();
+    }
+
+    private void finishPendingUnbanBatchIfNeeded() {
+        if (!pendingUnbans.isEmpty()) return;
+        if (pendingUnbanSuccessCount > 0) {
+            Toast.makeText(this, getString(R.string.msg_users_unbanned, pendingUnbanSuccessCount), Toast.LENGTH_SHORT).show();
+        }
+        pendingUnbanSuccessCount = 0;
+    }
+
     @Override
     public boolean onSupportNavigateUp() {
         finish();

@@ -19,6 +19,10 @@
         app:showAsAction="ifRoom|withText"
         android:title="@string/action_stream"/>
     <item
+        android:id="@+id/action_pause"
+        app:showAsAction="ifRoom|withText"
+        android:title="@string/action_pause"/>
+    <item
         android:id="@+id/action_move"
         app:showAsAction="never"
         android:title="@string/action_move_short"/>

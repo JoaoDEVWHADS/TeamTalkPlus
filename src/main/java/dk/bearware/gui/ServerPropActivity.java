@@ -21,14 +21,18 @@ import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
 import dk.bearware.ServerProperties;
+import dk.bearware.ClientErrorMsg;
 import dk.bearware.ServerLogEvent;
 import dk.bearware.TeamTalkBase;
-import dk.bearware.UserType;
+import dk.bearware.UserAccount;
+import dk.bearware.UserRight;
 import dk.bearware.backend.TeamTalkConnection;
 import dk.bearware.backend.TeamTalkConnectionListener;
 import dk.bearware.backend.TeamTalkService;
+import dk.bearware.events.ClientEventListener;
 
-public class ServerPropActivity extends AppCompatActivity implements TeamTalkConnectionListener {
+public class ServerPropActivity extends AppCompatActivity implements TeamTalkConnectionListener,
+        ClientEventListener.OnCmdSuccessListener, ClientEventListener.OnCmdErrorListener {
 
     private static final String TAG = "ServerPropActivity";
 
@@ -38,6 +42,8 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
     private Button btnSave;
     private ServerPropPagerAdapter pagerAdapter;
     private ServerProperties mProps = new ServerProperties();
+    private boolean canEditServerProperties = false;
+    private int updateCmdId = 0;
 
     TeamTalkService getService() {
         return mConnection.getService();
@@ -94,6 +100,9 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
     @Override
     protected void onDestroy() {
         if (mConnection.isBound()) {
+            TeamTalkService service = mConnection.getService();
+            if (service != null)
+                service.getEventHandler().unregisterListener(this);
             unbindService(mConnection);
         }
         super.onDestroy();
@@ -109,38 +118,37 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
     }
 
     private void saveServerProperties() {
+        if (!canEditServerProperties || updateCmdId > 0) return;
 
-        for (int i = 0; i < pagerAdapter.getItemCount(); i++) {
-            Fragment f = getSupportFragmentManager().findFragmentByTag("f" + i);
-            if (f instanceof ServerPropFragment) {
-                ((ServerPropFragment) f).updateProperties(mProps);
+        for (Fragment f : getSupportFragmentManager().getFragments()) {
+            if (f instanceof ServerPropFragment && !((ServerPropFragment) f).updateProperties(mProps)) {
+                Toast.makeText(this, R.string.err_invalid_number, Toast.LENGTH_SHORT).show();
+                return;
             }
         }
 
-        int cmdId = getClient().doUpdateServer(mProps);
-        if (cmdId > 0) {
+        updateCmdId = getClient().doUpdateServer(mProps);
+        if (updateCmdId > 0) {
+            btnSave.setEnabled(false);
             Toast.makeText(this, R.string.text_cmd_processing, Toast.LENGTH_SHORT).show();
-            finish();
         } else {
+            updateCmdId = 0;
             Toast.makeText(this, R.string.err_update_server_props_failed, Toast.LENGTH_SHORT).show();
         }
     }
 
     @Override
     public void onServiceConnected(TeamTalkService service) {
+        service.getEventHandler().registerOnCmdSuccess(this, true);
+        service.getEventHandler().registerOnCmdError(this, true);
         if (getClient().getServerProperties(mProps)) {
-            // Determine if the current user has admin rights
-            dk.bearware.User me = service.getUsers().get(getClient().getMyUserID());
-            boolean isAdmin = (me != null && (me.uUserType & UserType.USERTYPE_ADMIN) == UserType.USERTYPE_ADMIN);
+            UserAccount myAccount = new UserAccount();
+            canEditServerProperties = getClient().getMyUserAccount(myAccount)
+                    && (myAccount.uUserRights & UserRight.USERRIGHT_UPDATE_SERVERPROPERTIES) != 0;
 
-            if (!isAdmin) {
-                btnSave.setVisibility(android.view.View.GONE);
-            } else {
-                btnSave.setVisibility(android.view.View.VISIBLE);
-            }
-
-            pagerAdapter.setAdmin(isAdmin);
-            refreshFragments(!isAdmin);
+            btnSave.setVisibility(canEditServerProperties ? android.view.View.VISIBLE : android.view.View.GONE);
+            pagerAdapter.setAdmin(canEditServerProperties);
+            refreshFragments(!canEditServerProperties);
         }
     }
 
@@ -153,11 +161,50 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
     }
 
     @Override
-    public void onServiceDisconnected(TeamTalkService service) {}
+    public void onServiceDisconnected(TeamTalkService service) {
+        service.getEventHandler().unregisterListener(this);
+    }
+
+    @Override
+    public void onCmdSuccess(int cmdId) {
+        if (cmdId != updateCmdId) return;
+        updateCmdId = 0;
+        setResult(RESULT_OK);
+        finish();
+    }
+
+    @Override
+    public void onCmdError(int cmdId, ClientErrorMsg errmsg) {
+        if (cmdId != updateCmdId) return;
+        updateCmdId = 0;
+        btnSave.setEnabled(true);
+        Utils.notifyError(this, errmsg);
+    }
+
+    private static Integer parseIntField(EditText editText) {
+        if (editText == null) return null;
+        try {
+            editText.setError(null);
+            return Integer.parseInt(editText.getText().toString().trim());
+        } catch (NumberFormatException e) {
+            editText.setError(editText.getContext().getString(R.string.err_invalid_number));
+            return null;
+        }
+    }
+
+    private static Integer parsePortField(EditText editText) {
+        Integer value = parseIntField(editText);
+        if (value == null) return null;
+        if (value < 1 || value > 65535) {
+            editText.setError(editText.getContext().getString(R.string.err_invalid_port));
+            return null;
+        }
+        return value;
+    }
 
     public interface ServerPropFragment {
         void refreshUI(ServerProperties props, boolean readOnly);
-        void updateProperties(ServerProperties props);
+        boolean updateProperties(ServerProperties props);
     }
 
     private class ServerPropPagerAdapter extends FragmentStateAdapter {
@@ -203,14 +250,14 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             txtServerVersion = v.findViewById(R.id.text_server_version);
 
             ServerPropActivity activity = (ServerPropActivity) getActivity();
-            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, false);
+            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, !activity.canEditServerProperties);
             return v;
         }
         @Override
         public void refreshUI(ServerProperties props, boolean readOnly) {
             if (editName == null) return;
             editName.setText(props.szServerName);
-            editMOTD.setText(props.szMOTD);
+            editMOTD.setText(readOnly ? props.szMOTD : props.szMOTDRaw);
             editMaxUsers.setText(String.valueOf(props.nMaxUsers));
             editMaxLogins.setText(String.valueOf(props.nMaxLoginsPerIPAddress));
             editTcp.setText(String.valueOf(props.nTcpPort));
@@ -231,17 +278,21 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             chkAutoSave.setEnabled(editable);
         }
         @Override
-        public void updateProperties(ServerProperties props) {
-            if (editName == null) return;
+        public boolean updateProperties(ServerProperties props) {
+            if (editName == null) return true;
+            Integer maxUsers = parseIntField(editMaxUsers);
+            Integer maxLogins = parseIntField(editMaxLogins);
+            Integer tcp = parsePortField(editTcp);
+            Integer udp = parsePortField(editUdp);
+            if (maxUsers == null || maxLogins == null || tcp == null || udp == null) return false;
             props.szServerName = editName.getText().toString();
-            props.szMOTD = editMOTD.getText().toString();
-            try {
-                props.nMaxUsers = Integer.parseInt(editMaxUsers.getText().toString());
-                props.nMaxLoginsPerIPAddress = Integer.parseInt(editMaxLogins.getText().toString());
-                props.nTcpPort = Integer.parseInt(editTcp.getText().toString());
-                props.nUdpPort = Integer.parseInt(editUdp.getText().toString());
-            } catch (NumberFormatException ignored) {}
+            props.szMOTDRaw = editMOTD.getText().toString();
+            props.nMaxUsers = maxUsers;
+            props.nMaxLoginsPerIPAddress = maxLogins;
+            props.nTcpPort = tcp;
+            props.nUdpPort = udp;
             props.bAutoSave = chkAutoSave.isChecked();
+            return true;
         }
     }
 
@@ -256,7 +307,7 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             editDesktop = v.findViewById(R.id.edit_max_desktop);
             editTotal = v.findViewById(R.id.edit_max_total);
             ServerPropActivity activity = (ServerPropActivity) getActivity();
-            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, false);
+            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, !activity.canEditServerProperties);
             return v;
         }
         @Override
@@ -273,15 +324,17 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             editTotal.setEnabled(editable);
         }
         @Override
-        public void updateProperties(ServerProperties props) {
-            if (editVoice == null) return;
-            try {
-                props.nMaxVoiceTxPerSecond = Integer.parseInt(editVoice.getText().toString());
-                props.nMaxVideoCaptureTxPerSecond = Integer.parseInt(editVideo.getText().toString());
-                props.nMaxMediaFileTxPerSecond = Integer.parseInt(editMedia.getText().toString());
-                props.nMaxDesktopTxPerSecond = Integer.parseInt(editDesktop.getText().toString());
-                props.nMaxTotalTxPerSecond = Integer.parseInt(editTotal.getText().toString());
-            } catch (NumberFormatException ignored) {}
+        public boolean updateProperties(ServerProperties props) {
+            if (editVoice == null) return true;
+            Integer voice = parseIntField(editVoice), video = parseIntField(editVideo), media = parseIntField(editMedia),
+                    desktop = parseIntField(editDesktop), total = parseIntField(editTotal);
+            if (voice == null || video == null || media == null || desktop == null || total == null) return false;
+            props.nMaxVoiceTxPerSecond = voice;
+            props.nMaxVideoCaptureTxPerSecond = video;
+            props.nMaxMediaFileTxPerSecond = media;
+            props.nMaxDesktopTxPerSecond = desktop;
+            props.nMaxTotalTxPerSecond = total;
+            return true;
         }
     }
 
@@ -294,7 +347,7 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             editDelay = v.findViewById(R.id.edit_login_delay);
             editTimeout = v.findViewById(R.id.edit_user_timeout);
             ServerPropActivity activity = (ServerPropActivity) getActivity();
-            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, false);
+            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, !activity.canEditServerProperties);
             return v;
         }
         @Override
@@ -309,18 +362,21 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             editTimeout.setEnabled(editable);
         }
         @Override
-        public void updateProperties(ServerProperties props) {
-            if (editAttempts == null) return;
-            try {
-                props.nMaxLoginAttempts = Integer.parseInt(editAttempts.getText().toString());
-                props.nLoginDelayMSec = Integer.parseInt(editDelay.getText().toString());
-                props.nUserTimeout = Integer.parseInt(editTimeout.getText().toString());
-            } catch (NumberFormatException ignored) {}
+        public boolean updateProperties(ServerProperties props) {
+            if (editAttempts == null) return true;
+            Integer attempts = parseIntField(editAttempts), delay = parseIntField(editDelay), timeout = parseIntField(editTimeout);
+            if (attempts == null || delay == null || timeout == null) return false;
+            props.nMaxLoginAttempts = attempts;
+            props.nLoginDelayMSec = delay;
+            props.nUserTimeout = timeout;
+            return true;
         }
     }
 
     public static class LoggingPropFragment extends Fragment implements ServerPropFragment {
         CheckBox chkLogin, chkKick, chkChan, chkSrv, chkFile;
+        private int originalEvents;
+        private boolean initialLogin, initialKick, initialChannel, initialServer, initialFile;
         @Override
         public android.view.View onCreateView(android.view.LayoutInflater inflater, android.view.ViewGroup container, Bundle savedInstanceState) {
             android.view.View v = inflater.inflate(R.layout.fragment_server_prop_logging, container, false);
@@ -330,33 +386,70 @@ public class ServerPropActivity extends AppCompatActivity implements TeamTalkCon
             chkSrv = v.findViewById(R.id.chk_log_server_update);
             chkFile = v.findViewById(R.id.chk_log_file_transfer);
             ServerPropActivity activity = (ServerPropActivity) getActivity();
-            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, false);
+            if (activity != null && activity.mProps != null) refreshUI(activity.mProps, !activity.canEditServerProperties);
             return v;
         }
         @Override
         public void refreshUI(ServerProperties props, boolean readOnly) {
             if (chkLogin == null) return;
             int e = props.uServerLogEvents;
-            chkLogin.setChecked((e & (ServerLogEvent.SERVERLOGEVENT_USER_CONNECTED | ServerLogEvent.SERVERLOGEVENT_USER_DISCONNECTED)) != 0);
-            chkKick.setChecked((e & (ServerLogEvent.SERVERLOGEVENT_USER_KICKED | ServerLogEvent.SERVERLOGEVENT_USER_BANNED)) != 0);
-            chkChan.setChecked((e & (ServerLogEvent.SERVERLOGEVENT_CHANNEL_CREATED | ServerLogEvent.SERVERLOGEVENT_CHANNEL_UPDATED)) != 0);
-            chkSrv.setChecked((e & ServerLogEvent.SERVERLOGEVENT_SERVER_UPDATED) != 0);
-            chkFile.setChecked((e & ServerLogEvent.SERVERLOGEVENT_FILE_UPLOADED) != 0);
+            originalEvents = e;
+            int loginMask = ServerLogEvent.SERVERLOGEVENT_USER_CONNECTED
+                    | ServerLogEvent.SERVERLOGEVENT_USER_DISCONNECTED
+                    | ServerLogEvent.SERVERLOGEVENT_USER_LOGGEDIN
+                    | ServerLogEvent.SERVERLOGEVENT_USER_LOGGEDOUT;
+            int kickMask = ServerLogEvent.SERVERLOGEVENT_USER_KICKED | ServerLogEvent.SERVERLOGEVENT_USER_BANNED;
+            int channelMask = ServerLogEvent.SERVERLOGEVENT_CHANNEL_CREATED
+                    | ServerLogEvent.SERVERLOGEVENT_CHANNEL_UPDATED
+                    | ServerLogEvent.SERVERLOGEVENT_CHANNEL_REMOVED;
+            int fileMask = ServerLogEvent.SERVERLOGEVENT_FILE_UPLOADED
+                    | ServerLogEvent.SERVERLOGEVENT_FILE_DOWNLOADED
+                    | ServerLogEvent.SERVERLOGEVENT_FILE_DELETED;
+            initialLogin = (e & loginMask) != 0;
+            initialKick = (e & kickMask) != 0;
+            initialChannel = (e & channelMask) != 0;
+            initialServer = (e & ServerLogEvent.SERVERLOGEVENT_SERVER_UPDATED) != 0;
+            initialFile = (e & fileMask) != 0;
+            chkLogin.setChecked(initialLogin);
+            chkKick.setChecked(initialKick);
+            chkChan.setChecked(initialChannel);
+            chkSrv.setChecked(initialServer);
+            chkFile.setChecked(initialFile);
             boolean editable = !readOnly;
             chkLogin.setEnabled(editable); chkKick.setEnabled(editable);
             chkChan.setEnabled(editable); chkSrv.setEnabled(editable);
             chkFile.setEnabled(editable);
         }
         @Override
-        public void updateProperties(ServerProperties props) {
-            if (chkLogin == null) return;
-            int e = 0;
-            if (chkLogin.isChecked()) e |= (ServerLogEvent.SERVERLOGEVENT_USER_CONNECTED | ServerLogEvent.SERVERLOGEVENT_USER_DISCONNECTED | ServerLogEvent.SERVERLOGEVENT_USER_LOGGEDIN | ServerLogEvent.SERVERLOGEVENT_USER_LOGGEDOUT);
-            if (chkKick.isChecked()) e |= (ServerLogEvent.SERVERLOGEVENT_USER_KICKED | ServerLogEvent.SERVERLOGEVENT_USER_BANNED);
-            if (chkChan.isChecked()) e |= (ServerLogEvent.SERVERLOGEVENT_CHANNEL_CREATED | ServerLogEvent.SERVERLOGEVENT_CHANNEL_UPDATED | ServerLogEvent.SERVERLOGEVENT_CHANNEL_REMOVED);
-            if (chkSrv.isChecked()) e |= ServerLogEvent.SERVERLOGEVENT_SERVER_UPDATED;
-            if (chkFile.isChecked()) e |= (ServerLogEvent.SERVERLOGEVENT_FILE_UPLOADED | ServerLogEvent.SERVERLOGEVENT_FILE_DOWNLOADED | ServerLogEvent.SERVERLOGEVENT_FILE_DELETED);
+        public boolean updateProperties(ServerProperties props) {
+            if (chkLogin == null) return true;
+            final int loginMask = ServerLogEvent.SERVERLOGEVENT_USER_CONNECTED
+                    | ServerLogEvent.SERVERLOGEVENT_USER_DISCONNECTED
+                    | ServerLogEvent.SERVERLOGEVENT_USER_LOGGEDIN
+                    | ServerLogEvent.SERVERLOGEVENT_USER_LOGGEDOUT;
+            final int kickMask = ServerLogEvent.SERVERLOGEVENT_USER_KICKED
+                    | ServerLogEvent.SERVERLOGEVENT_USER_BANNED;
+            final int channelMask = ServerLogEvent.SERVERLOGEVENT_CHANNEL_CREATED
+                    | ServerLogEvent.SERVERLOGEVENT_CHANNEL_UPDATED
+                    | ServerLogEvent.SERVERLOGEVENT_CHANNEL_REMOVED;
+            final int serverMask = ServerLogEvent.SERVERLOGEVENT_SERVER_UPDATED;
+            final int fileMask = ServerLogEvent.SERVERLOGEVENT_FILE_UPLOADED
+                    | ServerLogEvent.SERVERLOGEVENT_FILE_DOWNLOADED
+                    | ServerLogEvent.SERVERLOGEVENT_FILE_DELETED;
+            // Preserve every event exactly unless the user actually changes a grouped checkbox.
+            int e = originalEvents;
+            if (chkLogin.isChecked() != initialLogin)
+                e = chkLogin.isChecked() ? (e | loginMask) : (e & ~loginMask);
+            if (chkKick.isChecked() != initialKick)
+                e = chkKick.isChecked() ? (e | kickMask) : (e & ~kickMask);
+            if (chkChan.isChecked() != initialChannel)
+                e = chkChan.isChecked() ? (e | channelMask) : (e & ~channelMask);
+            if (chkSrv.isChecked() != initialServer)
+                e = chkSrv.isChecked() ? (e | serverMask) : (e & ~serverMask);
+            if (chkFile.isChecked() != initialFile)
+                e = chkFile.isChecked() ? (e | fileMask) : (e & ~fileMask);
             props.uServerLogEvents = e;
+            return true;
         }
     }
 }
