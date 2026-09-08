@@ -378,6 +378,10 @@ public class MainActivity
         // Use 'this' instead of getApplicationContext() to ensure the Activity's updated 
         // resources (from attachBaseContext) are used for localized strings.
         ctx = this;
+        // setLicenseInformation() is declared on TeamTalkBase. Calling it through
+        // TeamTalk5 does not guarantee TeamTalk5's static initializer has run, so
+        // explicitly load the JNI library when MainActivity is the process entry point.
+        TeamTalk5.loadLibrary();
         TeamTalk5.setLicenseInformation(License.REGISTRATION_NAME, License.REGISTRATION_KEY);
 
         soundExecutor = Executors.newSingleThreadExecutor();

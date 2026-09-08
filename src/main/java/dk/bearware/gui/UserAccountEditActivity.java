@@ -5,6 +5,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.text.method.HideReturnsTransformationMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.view.View;
@@ -87,6 +88,8 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
     private String originalUsername = "";
     private int pendingCreateCmdId = 0;
     private int pendingDeleteCmdId = 0;
+    private boolean serviceBindRequested = false;
+    private boolean serviceBound = false;
 
 
     @Override
@@ -193,9 +196,9 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
     @Override
     protected void onStart() {
         super.onStart();
-        if (!ttConnection.isBound()) {
+        if (!serviceBound && !serviceBindRequested) {
             Intent intent = new Intent(this, TeamTalkService.class);
-            bindService(intent, ttConnection, Context.BIND_AUTO_CREATE);
+            serviceBindRequested = bindService(intent, ttConnection, Context.BIND_AUTO_CREATE);
         }
     }
 
@@ -216,21 +219,34 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
     }
 
     private void unbindTeamTalkService() {
-        if (!ttConnection.isBound()) return;
+        if (!serviceBound && !serviceBindRequested) return;
         TeamTalkService service = ttConnection.getService();
         if (service != null) service.getEventHandler().unregisterListener(this);
-        unbindService(ttConnection);
+        try {
+            unbindService(ttConnection);
+        } catch (IllegalArgumentException e) {
+            // A normal unbind does not invoke ServiceConnection.onServiceDisconnected(),
+            // so never let a stale connection flag crash the activity on destruction.
+            Log.w("UserAccountEdit", "TeamTalk service was already unbound", e);
+        } finally {
+            serviceBound = false;
+            serviceBindRequested = false;
+        }
     }
 
     @Override
     public void onServiceConnected(TeamTalkService service) {
+        serviceBindRequested = false;
+        serviceBound = true;
         service.getEventHandler().registerOnCmdSuccess(this, true);
         service.getEventHandler().registerOnCmdError(this, true);
     }
 
     @Override
     public void onServiceDisconnected(TeamTalkService service) {
-        service.getEventHandler().unregisterListener(this);
+        serviceBindRequested = false;
+        serviceBound = false;
+        if (service != null) service.getEventHandler().unregisterListener(this);
     }
 
     private void saveAccount() {
@@ -246,8 +262,25 @@ public class UserAccountEditActivity extends AppCompatActivity implements TeamTa
             }
         }
 
+        // Match the Windows TeamTalk clients: an empty username represents the
+        // anonymous account. Ask for confirmation instead of rejecting it.
         if (mAccount.szUsername == null || mAccount.szUsername.trim().isEmpty()) {
-            Toast.makeText(this, R.string.err_username_required, Toast.LENGTH_SHORT).show();
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.dialog_anonymous_user_title)
+                    .setMessage(R.string.dialog_anonymous_user_message)
+                    .setPositiveButton(android.R.string.yes, (dialog, which) -> submitAccount())
+                    .setNegativeButton(android.R.string.no, null)
+                    .show();
+            return;
+        }
+
+        submitAccount();
+    }
+
+    private void submitAccount() {
+        TeamTalkService service = ttConnection != null ? ttConnection.getService() : null;
+        if (service == null || service.getTTInstance() == null) {
+            Toast.makeText(this, R.string.err_service_not_available, Toast.LENGTH_SHORT).show();
             return;
         }
 

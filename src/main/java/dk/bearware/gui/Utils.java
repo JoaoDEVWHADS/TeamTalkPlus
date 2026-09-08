@@ -643,12 +643,26 @@ public class Utils {
         if (xml == null || xml.length() > MAX_SERVER_XML_CHARS) {
             throw new IllegalArgumentException("XML document is empty or too large");
         }
+
+        // Android's XML parser varies by API/runtime. Some versions throw
+        // ParserConfigurationException for otherwise standard hardening features.
+        // Reject dangerous declarations ourselves, then enable every supported
+        // parser protection individually instead of making XML parsing fail.
+        String upperXml = xml.toUpperCase(java.util.Locale.ROOT);
+        if (upperXml.contains("<!DOCTYPE") || upperXml.contains("<!ENTITY")) {
+            throw new IllegalArgumentException("DOCTYPE and ENTITY declarations are not allowed");
+        }
+
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
-        factory.setXIncludeAware(false);
+        setXmlFeatureIfSupported(factory, "http://apache.org/xml/features/disallow-doctype-decl", true);
+        setXmlFeatureIfSupported(factory, "http://xml.org/sax/features/external-general-entities", false);
+        setXmlFeatureIfSupported(factory, "http://xml.org/sax/features/external-parameter-entities", false);
+        setXmlFeatureIfSupported(factory, "http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        try {
+            factory.setXIncludeAware(false);
+        } catch (UnsupportedOperationException ignored) {
+            // Not implemented by some Android parsers.
+        }
         factory.setExpandEntityReferences(false);
         try {
             factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "");
@@ -658,6 +672,14 @@ public class Utils {
         }
         DocumentBuilder builder = factory.newDocumentBuilder();
         return builder.parse(new InputSource(new StringReader(xml)));
+    }
+
+    private static void setXmlFeatureIfSupported(DocumentBuilderFactory factory, String feature, boolean enabled) {
+        try {
+            factory.setFeature(feature, enabled);
+        } catch (javax.xml.parsers.ParserConfigurationException | AbstractMethodError ignored) {
+            Log.w(TAG, "XML parser does not support feature: " + feature);
+        }
     }
 
     public static Vector<ServerEntry> getXmlServerEntries(String xml) {
